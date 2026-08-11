@@ -9,13 +9,13 @@ const suggestions = [
       "Tell me a short story. Format it in rich markdown: a title heading, a blockquote, a bulleted list, a table, and some bold and italic text.",
   },
   {
-    label: "What's new in Next.js",
+    label: "Explain Workers",
     prompt:
-      "Search the web for the latest Next.js release and summarize what's new.",
+      "Explain how Cloudflare Workers run applications at the edge. Use a concise example.",
   },
   {
     label: "Look up a repo",
-    prompt: "What are the GitHub stats for vercel/next.js?",
+    prompt: "What are the GitHub stats for cloudflare/workers-sdk?",
   },
   {
     label: "Plan a dinner",

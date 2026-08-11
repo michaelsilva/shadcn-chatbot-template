@@ -78,7 +78,7 @@ export function Chat({
                 <EmptyTitle>What can I help with?</EmptyTitle>
                 <EmptyDescription>
                   Pick a model and start chatting. Responses stream through the
-                  Vercel AI Gateway.
+                  Cloudflare AI Gateway.
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>

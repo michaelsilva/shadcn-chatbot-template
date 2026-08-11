@@ -1,4 +1,4 @@
-import { GatewayError } from "@ai-sdk/gateway"
+import { getCloudflareContext } from "@opennextjs/cloudflare"
 import {
   convertToModelMessages,
   createUIMessageStreamResponse,
@@ -7,6 +7,7 @@ import {
   toUIMessageStream,
 } from "ai"
 
+import { getCloudflareModel } from "@/lib/ai"
 import { DEFAULT_MODEL, isModelAllowed } from "@/lib/models"
 import { getTools, type ChatUIMessage } from "@/lib/tools"
 
@@ -23,8 +24,10 @@ export async function POST(req: Request) {
     )
   }
 
+  const { env } = await getCloudflareContext({ async: true })
+
   const result = streamText({
-    model: modelId,
+    model: getCloudflareModel(env, modelId),
     messages: await convertToModelMessages(messages),
     tools: getTools(modelId),
     stopWhen: isStepCount(5),
@@ -34,10 +37,22 @@ export async function POST(req: Request) {
     stream: toUIMessageStream({
       stream: result.stream,
       sendSources: true,
-      onError: (error) =>
-        GatewayError.isInstance(error)
-          ? error.message
-          : "Something went wrong. Please try again.",
+      onError: (error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        console.error(
+          JSON.stringify({
+            event: "ai_gateway_request_failed",
+            message,
+            model: modelId,
+          })
+        )
+
+        if (message === "Payment Required") {
+          return "This model requires Cloudflare AI Gateway credits. Choose GLM 4.7 Flash or add credits to the Cloudflare account."
+        }
+
+        return "Cloudflare AI Gateway could not complete the request. Please try again."
+      },
     }),
   })
 }

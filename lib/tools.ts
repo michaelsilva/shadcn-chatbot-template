@@ -3,6 +3,16 @@ import { openai } from "@ai-sdk/openai"
 import { tool, type InferUITools, type UIDataTypes, type UIMessage } from "ai"
 import { z } from "zod"
 
+const githubRepositorySchema = z.object({
+  full_name: z.string(),
+  description: z.string().nullable(),
+  stargazers_count: z.number(),
+  forks_count: z.number(),
+  open_issues_count: z.number(),
+  language: z.string().nullable(),
+  html_url: z.string().url(),
+})
+
 const baseTools = {
   github_repo: tool({
     description:
@@ -10,7 +20,9 @@ const baseTools = {
     inputSchema: z.object({
       repo: z
         .string()
-        .describe('The repository in "owner/name" format, e.g. "vercel/next.js"'),
+        .describe(
+          'The repository in "owner/name" format, e.g. "cloudflare/workers-sdk"'
+        ),
     }),
     execute: async ({ repo }) => {
       const res = await fetch(`https://api.github.com/repos/${repo}`, {
@@ -19,15 +31,16 @@ const baseTools = {
       if (!res.ok) {
         return { error: `Could not find repository ${repo}.` }
       }
-      const data = await res.json()
+      const data = githubRepositorySchema.parse(await res.json())
+
       return {
-        repo: data.full_name as string,
-        description: (data.description ?? "") as string,
-        stars: data.stargazers_count as number,
-        forks: data.forks_count as number,
-        openIssues: data.open_issues_count as number,
-        language: (data.language ?? "Unknown") as string,
-        url: data.html_url as string,
+        repo: data.full_name,
+        description: data.description ?? "",
+        stars: data.stargazers_count,
+        forks: data.forks_count,
+        openIssues: data.open_issues_count,
+        language: data.language ?? "Unknown",
+        url: data.html_url,
       }
     },
   }),

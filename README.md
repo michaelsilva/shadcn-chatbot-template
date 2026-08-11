@@ -1,38 +1,33 @@
 # Chatbot Template
 
-A minimal chatbot template built with Next.js, the [AI SDK](https://ai-sdk.dev), [shadcn/ui](https://ui.shadcn.com), [shadcn/react](https://ui.shadcn.com/docs/react/message-scroller), [shadcn/typeset](https://ui.shadcn.com/docs/typeset) and the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway).
+A minimal chatbot template built with Next.js, the [AI SDK](https://ai-sdk.dev), [shadcn/ui](https://ui.shadcn.com), [shadcn/react](https://ui.shadcn.com/docs/react/message-scroller), and [shadcn/typeset](https://ui.shadcn.com/docs/typeset), powered by [Cloudflare AI Gateway](https://developers.cloudflare.com/ai-gateway/) on [Cloudflare Workers](https://developers.cloudflare.com/workers/).
 
 ## Features
 
 - Streaming chat with markdown rendering and shadcn/typeset
 - Tool calling example
-- Web search via each provider's built-in search tool
+- Cloudflare AI Gateway routing for Workers AI, Anthropic, and OpenAI models
 - Human-in-the-loop questionnaire. The model can ask clarifying questions, answered with the shadcn questionnaire component
 
-## Deploy
+## Deploy to Cloudflare
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fshadcn-ui%2Fchatbot-template&project-name=chatbot-template&repository-name=chatbot-template)
+The project uses the [OpenNext Cloudflare adapter](https://opennext.js.org/cloudflare) and a pre-authenticated Workers AI binding, so no Cloudflare API token or provider key is stored in the application.
 
-That's it — no configuration needed. Vercel deployments authenticate to the AI Gateway automatically via OIDC, and usage runs on your team's [AI Gateway credits](https://vercel.com/docs/ai-gateway/pricing).
+Authenticate Wrangler once, then install, generate binding types, and deploy:
+
+```bash
+pnpm exec wrangler login
+pnpm install
+pnpm cf-typegen
+pnpm deploy
+```
+
+Wrangler prints the deployed `workers.dev` URL. The configured `default` gateway is created automatically on its first AI request. GLM 4.7 Flash runs through Workers AI within the account's Workers AI allocation. The included OpenAI and Anthropic models use [Cloudflare Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/) and require AI Gateway credits.
 
 ## Local development
 
 ```bash
 pnpm install
-```
-
-Then give the app a gateway credential, either by pulling an OIDC token from your linked Vercel project:
-
-```bash
-vercel link
-vercel env pull
-```
-
-or by creating an API key in the Vercel dashboard (**AI Gateway → API Keys**) and adding it to `.env.local`:
-
-```bash
-cp .env.example .env.local
-# then set AI_GATEWAY_API_KEY=...
 ```
 
 Start the dev server:
@@ -41,18 +36,19 @@ Start the dev server:
 pnpm dev
 ```
 
+The AI binding is configured as a remote binding, so local chat requests use the Cloudflare account selected by Wrangler and may incur model charges. Use `pnpm preview` for a production build running in the local Workers runtime.
+
 ## Configuration
 
-| Env var              | Required       | Description                                                  |
-| -------------------- | -------------- | ------------------------------------------------------------ |
-| `AI_GATEWAY_API_KEY` | Local dev only | AI Gateway API key. Not needed on Vercel deployments (OIDC). |
+Non-secret Cloudflare configuration lives in [wrangler.jsonc](wrangler.jsonc). `CLOUDFLARE_AI_GATEWAY_ID` defaults to `default`, and the model allowlist lives in [lib/models.ts](lib/models.ts), where the first entry is the default model.
 
-The model list lives in [lib/models.ts](lib/models.ts) — the first entry is the default model.
+After changing Wrangler bindings or variables, run `pnpm cf-typegen` to refresh [cloudflare-env.d.ts](cloudflare-env.d.ts).
 
 ## How it works
 
-- [app/page.tsx](app/page.tsx) fetches the model catalog server-side with `gateway.getAvailableModels()` and renders the chat, or a setup notice if no credential is configured.
-- [app/api/chat/route.ts](app/api/chat/route.ts) streams responses with `streamText` — plain `"provider/model"` strings route through the AI Gateway automatically.
+- [app/page.tsx](app/page.tsx) renders the configured model allowlist.
+- [app/api/chat/route.ts](app/api/chat/route.ts) reads the Workers AI binding and streams responses with `streamText`.
+- [lib/ai.ts](lib/ai.ts) routes Workers AI and provider-native OpenAI or Anthropic requests through Cloudflare AI Gateway's pre-authenticated binding.
 - [components/chat.tsx](components/chat.tsx) renders the conversation with `useChat` and shadcn chat primitives.
 - [lib/tools.ts](lib/tools.ts) defines the tools: a server-executed GitHub repo lookup, the interactive `ask_user` questionnaire, and provider-native web search.
 
@@ -80,7 +76,7 @@ Message types are inferred from the tool definitions via `InferUITools`, so `par
 ## Adding components
 
 ```bash
-npx shadcn@latest add button
+pnpm dlx shadcn@latest add button
 ```
 
 ## License

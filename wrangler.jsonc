@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "shadcn-chatbot",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "upload_source_maps": true,
+  "vars": {
+    "CLOUDFLARE_AI_GATEWAY_ID": "default",
+  },
+  "ai": {
+    "binding": "AI",
+    "remote": true,
+  },
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".open-next/assets",
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1,
+    },
+  },
+}
