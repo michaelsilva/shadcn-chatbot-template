@@ -3,6 +3,15 @@ import { isoNow, newId } from "./ids"
 
 export type AssetSource = "upload" | "generated" | "derived" | "provider-imported" | "preview"
 
+/**
+ * 'pending' assets exist as a D1 row (so an owner/quota check and a
+ * server-owned R2 key were already committed to) but have not yet been
+ * verified to have real bytes at that key — see #7's upload-intent and
+ * provider-ingestion flows. Nothing should treat a 'pending' asset as
+ * usable.
+ */
+export type AssetUploadState = "pending" | "finalized" | "failed"
+
 export interface AssetRow {
   id: string
   owner_id: string
@@ -13,9 +22,14 @@ export interface AssetRow {
   byte_size: number | null
   checksum: string | null
   source: AssetSource
+  upload_state: AssetUploadState
   metadata_json: string | null
   created_at: string
   deleted_at: string | null
+}
+
+export function isAssetUsable(asset: AssetRow): boolean {
+  return asset.upload_state === "finalized" && asset.deleted_at === null
 }
 
 /** Metadata only — R2 (#25/#7) owns the bytes at `r2ObjectKey`. */
@@ -31,6 +45,7 @@ export async function createAsset(
     byteSize?: number
     checksum?: string
     metadata?: Record<string, unknown>
+    uploadState?: AssetUploadState
     id?: string
   }
 ): Promise<AssetRow> {
@@ -45,13 +60,15 @@ export async function createAsset(
     byte_size: input.byteSize ?? null,
     checksum: input.checksum ?? null,
     source: input.source,
+    upload_state: input.uploadState ?? "finalized",
     metadata_json: input.metadata ? JSON.stringify(input.metadata) : null,
     created_at: now,
     deleted_at: null,
   }
   await env.DB.prepare(
-    `INSERT INTO assets (id, owner_id, r2_object_key, artifact_kind, mime_type, representation, byte_size, checksum, source, metadata_json, created_at)
-     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)`
+    `INSERT INTO assets (id, owner_id, r2_object_key, artifact_kind, mime_type, representation, byte_size, checksum, source, upload_state, metadata_json, created_at)
+     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)
+     ON CONFLICT (id) DO NOTHING`
   )
     .bind(
       row.id,
@@ -63,11 +80,12 @@ export async function createAsset(
       row.byte_size,
       row.checksum,
       row.source,
+      row.upload_state,
       row.metadata_json,
       row.created_at
     )
     .run()
-  return row
+  return (await getAsset(env, { ownerId: input.ownerId, assetId: row.id })) ?? row
 }
 
 export async function getAsset(
@@ -80,6 +98,48 @@ export async function getAsset(
     .bind(input.assetId, input.ownerId)
     .first<AssetRow>()
   return row ?? null
+}
+
+/**
+ * Flips an asset's upload state once the caller has verified reality in
+ * R2 (or that ingestion failed) — never call this speculatively.
+ */
+export async function markAssetUploadState(
+  env: LedgerEnv,
+  input: {
+    ownerId: string
+    assetId: string
+    uploadState: AssetUploadState
+    byteSize?: number
+    checksum?: string
+  }
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE assets
+     SET upload_state = ?1,
+         byte_size = COALESCE(?2, byte_size),
+         checksum = COALESCE(?3, checksum)
+     WHERE id = ?4 AND owner_id = ?5`
+  )
+    .bind(
+      input.uploadState,
+      input.byteSize ?? null,
+      input.checksum ?? null,
+      input.assetId,
+      input.ownerId
+    )
+    .run()
+}
+
+export async function softDeleteAsset(
+  env: LedgerEnv,
+  input: { ownerId: string; assetId: string }
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE assets SET deleted_at = ?1 WHERE id = ?2 AND owner_id = ?3 AND deleted_at IS NULL`
+  )
+    .bind(isoNow(), input.assetId, input.ownerId)
+    .run()
 }
 
 export type AssetRelationKind =

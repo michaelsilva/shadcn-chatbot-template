@@ -1,0 +1,12 @@
+# Copy to .dev.vars (gitignored) and fill in real values for local
+# `wrangler dev` / `next dev` work that needs to mint real presigned R2
+# URLs. Never commit real values. See docs/r2-asset-storage.md.
+
+# R2 API token (S3-compatible), scoped to the shadcn-chatbot-assets
+# bucket only: https://developers.cloudflare.com/r2/api/tokens/
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+
+# Only needed if you use provider-native Fal execution locally (#3).
+# FAL_KEY=
+# CLOUDFLARE_AI_GATEWAY_TOKEN=

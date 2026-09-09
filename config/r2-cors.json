@@ -1,0 +1,13 @@
+{
+  "rules": [
+    {
+      "id": "browser-direct-upload-download",
+      "allowed": {
+        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "methods": ["PUT", "GET", "HEAD"],
+        "headers": ["content-type"]
+      },
+      "maxAgeSeconds": 3600
+    }
+  ]
+}
