@@ -1,7 +1,16 @@
 {
-  "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "shadcn-chatbot-workflows",
-  "main": "src/index.ts",
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // Test-only config for `pnpm workflow:test`. Deliberately omits the
+  // `ai` binding present in ../wrangler.jsonc: Cloudflare's own tooling
+  // warns "AI bindings always access remote resources" — simply
+  // *declaring* an AI binding (regardless of `remote: true`) makes
+  // Miniflare try to open a remote proxy session at pool startup,
+  // which needs a CLOUDFLARE_API_TOKEN in a non-interactive
+  // environment (CI has none, and shouldn't need one — every
+  // AI-touching plan step is mocked in tests; see
+  // test/plan-execution-workflow.test.ts). Never deployed.
+  "name": "shadcn-chatbot-workflows-test",
+  "main": "../src/index.ts",
   "compatibility_date": "2026-09-09",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
@@ -10,7 +19,7 @@
       "binding": "DB",
       "database_name": "shadcn-chatbot-db",
       "database_id": "dc0ae05d-1617-4cc7-9468-5444c56a5df7",
-      "migrations_dir": "../migrations",
+      "migrations_dir": "../../migrations",
     },
   ],
   "r2_buckets": [
@@ -22,10 +31,6 @@
   "vars": {
     "CLOUDFLARE_AI_GATEWAY_ID": "shadcn-chatbot",
     "CLOUDFLARE_ACCOUNT_ID": "d6ad0c67765f90322b4df2ff48b582b7",
-  },
-  "ai": {
-    "binding": "AI",
-    "remote": true,
   },
   "workflows": [
     {
@@ -39,11 +44,4 @@
       "class_name": "PlanExecutionWorkflow",
     },
   ],
-  "observability": {
-    "enabled": true,
-    "logs": {
-      "enabled": true,
-      "head_sampling_rate": 1,
-    },
-  },
 }
