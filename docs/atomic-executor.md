@@ -22,10 +22,18 @@ Those remain separate:
 - #24 — workflow/pipeline composition
 - #10 — external async job lifecycle/reconciliation
 - #6 — durable D1 execution/history ledger
-- #7 — R2 asset lifecycle
+- #7 — R2 asset lifecycle and resolution of durable app asset IDs to provider-ready inputs
 - #13 — Gateway routing/BYOK/fallback policy
 - #28 — canonical conversation context projection
 - #29 — portable vs provider-native tool policy
+
+### Asset-input boundary
+
+The atomic executor accepts provider-ready normalized input objects and validates them against the selected catalog capability. It does not know about R2 bucket layout, signed URLs, or ownership records because those do not exist until #7/#6 are implemented.
+
+When durable assets arrive, the caller immediately above this boundary must resolve an owner-authorized app asset reference into the provider-ready representation before invoking `executeAtomic()` or `submitAtomic()`. That resolver belongs with the asset/workflow layer, not inside the transport adapter. The executor still prevents callers from supplying arbitrary model routes, provider auth headers, or provider target URLs.
+
+Streaming conversation attachments follow the same rule through #28: canonical owner-scoped conversation parts are projected into model-ready messages before the atomic language-model adapter is invoked.
 
 ## Protocol adapters
 
@@ -154,4 +162,18 @@ HTTP 429, timeout-class responses, and 5xx failures are marked retryable. Most 4
 - HTTP error classification and retryability
 - queue-state normalization
 
-The dedicated `Atomic executor` GitHub Actions workflow also runs full `pnpm typecheck`, which validates the real AI SDK and Cloudflare binding integration against the repository's installed dependency versions.
+`pnpm atomic:integration` executes the actual atomic executor module against mocked Cloudflare/Fal transports. The disposable harness stubs only the SDK wire serializers; the normal repository typecheck validates the real installed SDK factories and Cloudflare overloads. It covers:
+
+- Workers AI, Responses, Anthropic Messages, and Chat Completions dispatch
+- Workers-hosted execution
+- one Universal Run path across raster image, SVG, ASR, TTS, and video catalog entries
+- provider-native Ideogram sync execution
+- provider-native Kling O3 queued submission
+- Key vs Bearer Fal authentication modes and authenticated-Gateway headers
+- arbitrary model/target rejection
+- queue/immediate misuse
+- retryable provider-native upstream failures
+
+The dedicated `Atomic executor` GitHub Actions workflow runs full `pnpm typecheck`, `pnpm atomic:contract`, and `pnpm atomic:integration` on every relevant PR or `main` change.
+
+Live paid-provider smoke tests remain a deployment/release concern (#16/#32). #3's CI proves the protocol/transport contracts without requiring provider secrets or incurring media-generation spend on every code change.
