@@ -1,0 +1,21 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  // Test-only Worker config for lib/db's Vitest suite. The real app
+  // Worker's wrangler.jsonc points at the OpenNext build output, which
+  // doesn't exist without a full `next build` — this trivial standalone
+  // Worker declares the same D1 binding so `pnpm db:test` doesn't
+  // require building the whole app first. Never deployed.
+  "name": "shadcn-chatbot-db-test",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-09-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shadcn-chatbot-db",
+      "database_id": "dc0ae05d-1617-4cc7-9468-5444c56a5df7",
+      "migrations_dir": "../migrations",
+    },
+  ],
+}
