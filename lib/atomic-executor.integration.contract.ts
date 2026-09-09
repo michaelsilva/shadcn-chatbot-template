@@ -122,11 +122,15 @@ export async function runAtomicExecutorIntegrationChecks() {
   )
 
   const nativeRequests: Array<{ url: string; init: RequestInit }> = []
-  const nativeFetch: typeof fetch = async (input, init = {}) => {
+  const nativeFetch: typeof fetch = async (input, init) => {
+    const requestInit = (init ?? {}) as RequestInit
     const url = typeof input === "string" ? input : input.toString()
-    nativeRequests.push({ url, init })
+    nativeRequests.push({ url, init: requestInit })
 
-    if (init.headers && new Headers(init.headers).has("x-fal-target-url")) {
+    if (
+      requestInit.headers &&
+      new Headers(requestInit.headers).has("x-fal-target-url")
+    ) {
       return new Response(
         JSON.stringify({
           request_id: "fal_job_1",
