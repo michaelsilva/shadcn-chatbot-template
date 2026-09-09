@@ -20,7 +20,8 @@
     "catalog:validate-workers": "node scripts/validate-workers-ai-catalog.mjs",
     "catalog:validate-workers:remote": "node scripts/validate-workers-ai-catalog.mjs --remote-required",
     "catalog:refresh-workers": "node scripts/validate-workers-ai-catalog.mjs --refresh",
-    "workflow:test": "cd workflow-worker && vitest run"
+    "workflow:test": "cd workflow-worker && vitest run",
+    "db:test": "vitest run"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.36",

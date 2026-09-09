@@ -7,7 +7,10 @@ on:
       - "workflow-worker/**"
       - "migrations/**"
       - "lib/runtime-probe*.ts"
+      - "lib/db/**"
       - "app/api/workflows/**"
+      - "test/**"
+      - "vitest.config.ts"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/cloudflare-runtime.yml"
@@ -18,7 +21,10 @@ on:
       - "workflow-worker/**"
       - "migrations/**"
       - "lib/runtime-probe*.ts"
+      - "lib/db/**"
       - "app/api/workflows/**"
+      - "test/**"
+      - "vitest.config.ts"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/cloudflare-runtime.yml"
@@ -46,3 +52,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm workflow:test
+      - run: pnpm db:test
