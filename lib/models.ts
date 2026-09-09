@@ -23,34 +23,31 @@ export interface GatewayModel {
   name: string
 }
 
-/**
- * Compatibility boundary for the starter's existing streamText executor.
- * #3 will replace this protocol allowlist with the full atomic executor.
- */
-const CURRENT_CHAT_PROTOCOLS = new Set<ModelProtocol>([
+const ATOMIC_CHAT_PROTOCOLS = new Set<ModelProtocol>([
   "workers-ai",
   "responses",
   "messages",
+  "chat-completions",
 ])
 
-function isCurrentChatExecutorModel(model: ModelDefinition) {
+function isAtomicChatModel(model: ModelDefinition) {
   return (
     (model.lifecycle === "launch" || model.lifecycle === "legacy") &&
     model.capabilities.includes("chat") &&
     model.inputs.includes("text") &&
     model.outputs.includes("text") &&
-    CURRENT_CHAT_PROTOCOLS.has(model.protocol)
+    ATOMIC_CHAT_PROTOCOLS.has(model.protocol)
   )
 }
 
 /**
- * Compatibility projection for the current text-chat UI.
- * Media models and protocols not yet supported by #3 stay in MODEL_CATALOG but
- * cannot be selected through the existing /api/chat route.
+ * Text-chat projection backed by the atomic executor. Media models remain in
+ * MODEL_CATALOG and are selected by workflow/capability code rather than this
+ * compatibility picker.
  */
-export const MODELS: GatewayModel[] = MODEL_CATALOG.filter(
-  isCurrentChatExecutorModel
-).map((model) => ({ id: model.key, name: model.name }))
+export const MODELS: GatewayModel[] = MODEL_CATALOG.filter(isAtomicChatModel).map(
+  (model) => ({ id: model.key, name: model.name })
+)
 
 const PREFERRED_DEFAULT_MODEL = "@cf/zai-org/glm-5.3-flash"
 const defaultModel = MODELS.find(
@@ -59,7 +56,7 @@ const defaultModel = MODELS.find(
 
 if (!defaultModel) {
   throw new Error(
-    `Preferred default model ${PREFERRED_DEFAULT_MODEL} is not available to the current chat executor.`
+    `Preferred default model ${PREFERRED_DEFAULT_MODEL} is not available to the atomic chat executor.`
   )
 }
 
@@ -70,10 +67,10 @@ export function getModelDefinition(key: string) {
   return findEnabledCatalogModel(MODEL_CATALOG, key)
 }
 
-/** Resolve only models that today's legacy /api/chat executor can actually run. */
+/** Resolve only models that the streaming text-chat surface can execute. */
 export function getChatModelDefinition(key: string) {
   const model = getModelDefinition(key)
-  return model && isCurrentChatExecutorModel(model) ? model : undefined
+  return model && isAtomicChatModel(model) ? model : undefined
 }
 
 export function isModelAllowed(key: string) {
