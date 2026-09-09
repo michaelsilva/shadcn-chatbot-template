@@ -46,6 +46,10 @@ export const MODEL_CATALOG = assertValidModelCatalog([
     verification: verified(
       "https://developers.cloudflare.com/workers-ai/models/glm-5.3-flash/"
     ),
+    // #13: same workers-binding/workers-ai transport+protocol, so the
+    // request input shape is unaffected. GLM 4.7 Flash is already the
+    // documented legacy/dev Workers fallback for this role (#17).
+    fallbackModelKeys: ["@cf/zai-org/glm-4.7-flash"],
   },
   {
     key: "openai/gpt-5.6-terra",
@@ -102,6 +106,10 @@ export const MODEL_CATALOG = assertValidModelCatalog([
     verification: verified(
       "https://developers.cloudflare.com/ai/models/openai/gpt-5.6-sol/"
     ),
+    // #13: same unified-run/responses transport+protocol as the balanced
+    // tier below, so a premium-tier outage/rate-limit degrades to the
+    // balanced tier rather than failing the request outright.
+    fallbackModelKeys: ["openai/gpt-5.6-terra"],
   },
   {
     key: "anthropic/claude-sonnet-5",

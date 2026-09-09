@@ -7,8 +7,10 @@ import {
   classifyAtomicHttpError,
   extractAtomicRequestId,
   extractAtomicUsage,
+  fallbackCandidateSupportsRequest,
   normalizeAtomicQueueState,
   readAtomicResponsePayload,
+  resolveAtomicGatewayPolicy,
   throwAtomicUpstreamError,
   validateAtomicRequestAgainstModel,
 } from "./atomic-executor-core"
@@ -55,6 +57,30 @@ const IMAGE_MODEL = {
     },
   ],
   verification: { lastVerifiedAt: "2026-09-09", docs: [] },
+} as const satisfies ModelDefinition
+
+const QUEUED_MODEL = {
+  ...IMAGE_MODEL,
+  key: "contract/queued",
+  upstreamModelId: "contract/queued",
+  transport: "gateway-provider-native",
+  execution: { result: "queued", streaming: false },
+} as const satisfies ModelDefinition
+
+const NARROWER_FALLBACK_MODEL = {
+  ...IMAGE_MODEL,
+  key: "contract/fallback-narrow",
+  upstreamModelId: "contract/fallback-narrow",
+  capabilities: ["image-generation"],
+  parameters: [
+    {
+      key: "quality",
+      label: "Quality",
+      kind: "select",
+      options: [{ value: "standard", label: "Standard" }],
+      default: "standard",
+    },
+  ],
 } as const satisfies ModelDefinition
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -300,6 +326,67 @@ export async function runAtomicExecutorCoreContractChecks() {
   assert(
     normalizeAtomicQueueState({ status: "COMPLETED" }) === "unknown",
     "unexpected submit status remains unknown for #10"
+  )
+
+  // #13: Gateway routing policy ----------------------------------------
+  const immediatePolicy = resolveAtomicGatewayPolicy(IMAGE_MODEL, {
+    ownerId: "owner_1",
+    correlationId: "corr_1",
+    workflowStepId: "step_1",
+  })
+  assert(immediatePolicy.skipCache === true, "generation calls skip cache")
+  assert(immediatePolicy.retries === undefined, "no automatic Gateway retry pending #10 idempotency")
+  assert(
+    immediatePolicy.metadata.owner_id === "owner_1" &&
+      immediatePolicy.metadata.correlation_id === "corr_1" &&
+      immediatePolicy.metadata.workflow_step_id === "step_1" &&
+      immediatePolicy.metadata.resolved_model_key === IMAGE_MODEL.key,
+    "policy metadata carries only trusted attribution ids"
+  )
+
+  const anonymousPolicy = resolveAtomicGatewayPolicy(IMAGE_MODEL, {})
+  assert(
+    !("owner_id" in anonymousPolicy.metadata) &&
+      !("correlation_id" in anonymousPolicy.metadata) &&
+      !("workflow_step_id" in anonymousPolicy.metadata),
+    "policy metadata omits absent context rather than sending empty values"
+  )
+
+  const queuedPolicy = resolveAtomicGatewayPolicy(QUEUED_MODEL, {})
+  assert(
+    queuedPolicy.requestTimeoutMs < immediatePolicy.requestTimeoutMs,
+    "queued submission timeout is shorter than an immediate/streaming call"
+  )
+
+  // #13: fallback candidate compatibility --------------------------------
+  const fallbackRequest = {
+    input: { prompt: "a poster", quality: "high", steps: 20 },
+    operation: {
+      capabilities: ["image-generation", "image-edit"] as const,
+      outputKind: "image" as const,
+    },
+  }
+  assert(
+    fallbackCandidateSupportsRequest(IMAGE_MODEL, fallbackRequest),
+    "a model satisfying the request's operation and parameters is a valid fallback candidate"
+  )
+  assert(
+    !fallbackCandidateSupportsRequest(NARROWER_FALLBACK_MODEL, fallbackRequest),
+    "a fallback missing a required capability (image-edit) is rejected"
+  )
+  assert(
+    !fallbackCandidateSupportsRequest(NARROWER_FALLBACK_MODEL, {
+      input: { prompt: "a poster", quality: "high" },
+      operation: { capabilities: ["image-generation"] as const },
+    }),
+    "a fallback whose own parameter schema rejects the input is rejected, even with a compatible capability set"
+  )
+  assert(
+    fallbackCandidateSupportsRequest(NARROWER_FALLBACK_MODEL, {
+      input: { prompt: "a poster", quality: "standard" },
+      operation: { capabilities: ["image-generation"] as const },
+    }),
+    "a fallback is accepted once both operation and its own parameter schema are satisfied"
   )
 
   return true

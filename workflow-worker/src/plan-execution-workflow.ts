@@ -307,6 +307,7 @@ export class PlanExecutionWorkflow extends WorkflowEntrypoint<Env, PlanExecution
           const submission = await submitAtomic(this.env, {
             modelKey,
             input: modelInput,
+            ownerId: ctx.ownerId,
             workflowStepId: planStep.key,
           })
           await createExternalJob(this.env, {
@@ -330,6 +331,7 @@ export class PlanExecutionWorkflow extends WorkflowEntrypoint<Env, PlanExecution
         const result = await executeAtomic(this.env, {
           modelKey,
           input: modelInput,
+          ownerId: ctx.ownerId,
           workflowStepId: planStep.key,
         })
         await recordStepAttempt(this.env, {

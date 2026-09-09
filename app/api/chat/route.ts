@@ -48,7 +48,10 @@ export async function POST(req: Request) {
     })
 
   const result = streamText({
-    model: getAtomicLanguageModel(env, modelKey),
+    model: getAtomicLanguageModel(env, modelKey, {
+      ownerId: owner.id,
+      correlationId: execution.id,
+    }),
     messages: await convertToModelMessages(messages),
     tools: supportsTools ? getTools(upstreamModelId) : undefined,
     stopWhen: isStepCount(5),
