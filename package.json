@@ -13,7 +13,10 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "catalog:validate-workers": "node scripts/validate-workers-ai-catalog.mjs",
+    "catalog:validate-workers:remote": "node scripts/validate-workers-ai-catalog.mjs --remote-required",
+    "catalog:refresh-workers": "node scripts/validate-workers-ai-catalog.mjs --refresh"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.36",

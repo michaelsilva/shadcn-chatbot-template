@@ -8,7 +8,7 @@ import {
 } from "ai"
 
 import { getCloudflareModel } from "@/lib/ai"
-import { DEFAULT_MODEL, getModelDefinition } from "@/lib/models"
+import { DEFAULT_MODEL, getChatModelDefinition } from "@/lib/models"
 import { getTools, type ChatUIMessage } from "@/lib/tools"
 
 export async function POST(req: Request) {
@@ -16,11 +16,11 @@ export async function POST(req: Request) {
     await req.json()
 
   const modelKey = model ?? DEFAULT_MODEL
-  const modelDefinition = getModelDefinition(modelKey)
+  const modelDefinition = getChatModelDefinition(modelKey)
 
   if (!modelDefinition) {
     return Response.json(
-      { error: `Model ${modelKey} is not available.` },
+      { error: `Model ${modelKey} is not available for chat.` },
       { status: 400 }
     )
   }

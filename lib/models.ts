@@ -1,11 +1,21 @@
 import {
-  assertValidModelCatalog,
   filterModelCatalog,
   findEnabledCatalogModel,
-  isServerEnabledModel,
   type ModelDefinition,
+  type ModelProtocol,
   type ModelQuery,
 } from "@/lib/model-catalog"
+import {
+  LAUNCH_MODEL_CATALOG,
+  MODEL_CATALOG,
+  WORKERS_AI_LAUNCH_MODEL_KEYS,
+} from "@/lib/model-catalog-data"
+
+export {
+  LAUNCH_MODEL_CATALOG,
+  MODEL_CATALOG,
+  WORKERS_AI_LAUNCH_MODEL_KEYS,
+}
 
 export interface GatewayModel {
   /** Stable application-facing model key. */
@@ -13,102 +23,61 @@ export interface GatewayModel {
   name: string
 }
 
-export const MODEL_CATALOG = assertValidModelCatalog([
-  {
-    key: "@cf/zai-org/glm-4.7-flash",
-    upstreamModelId: "@cf/zai-org/glm-4.7-flash",
-    name: "GLM 4.7 Flash",
-    provider: "zai-org",
-    catalogSource: "workers-ai",
-    transport: "workers-binding",
-    protocol: "workers-ai",
-    lifecycle: "legacy",
-    roles: ["fast", "value", "workers-hosted"],
-    inputs: ["text"],
-    outputs: ["text"],
-    capabilities: ["chat", "tool-calling"],
-    representations: [{ artifact: "text", format: "markdown" }],
-    execution: { result: "immediate", streaming: true },
-    tools: { appTools: true },
-    billingClass: "value",
-    accessClass: "public",
-    zeroDataRetention: "unknown",
-    verification: {
-      lastVerifiedAt: "2026-09-09",
-      docs: [],
-    },
-  },
-  {
-    key: "anthropic/claude-sonnet-5",
-    upstreamModelId: "anthropic/claude-sonnet-5",
-    name: "Claude Sonnet 5",
-    provider: "anthropic",
-    catalogSource: "unified",
-    transport: "unified-run",
-    protocol: "messages",
-    lifecycle: "launch",
-    roles: ["balanced"],
-    inputs: ["text"],
-    outputs: ["text"],
-    capabilities: ["chat", "tool-calling"],
-    representations: [{ artifact: "text", format: "markdown" }],
-    execution: { result: "immediate", streaming: true },
-    tools: { appTools: true, nativeTools: ["web-search"] },
-    billingClass: "standard",
-    accessClass: "credential-required",
-    zeroDataRetention: "unknown",
-    verification: {
-      lastVerifiedAt: "2026-09-09",
-      docs: [],
-    },
-  },
-  {
-    key: "openai/gpt-5.6-terra",
-    upstreamModelId: "openai/gpt-5.6-terra",
-    name: "GPT-5.6 Terra",
-    provider: "openai",
-    catalogSource: "unified",
-    transport: "unified-run",
-    protocol: "responses",
-    lifecycle: "launch",
-    roles: ["balanced"],
-    inputs: ["text"],
-    outputs: ["text"],
-    capabilities: ["chat", "tool-calling"],
-    representations: [{ artifact: "text", format: "markdown" }],
-    execution: { result: "immediate", streaming: true },
-    tools: { appTools: true, nativeTools: ["web-search"] },
-    billingClass: "standard",
-    accessClass: "credential-required",
-    zeroDataRetention: "unknown",
-    verification: {
-      lastVerifiedAt: "2026-09-09",
-      docs: [],
-    },
-  },
-] as const satisfies readonly ModelDefinition[])
+/**
+ * Compatibility boundary for the starter's existing streamText executor.
+ * #3 will replace this protocol allowlist with the full atomic executor.
+ */
+const CURRENT_CHAT_PROTOCOLS = new Set<ModelProtocol>([
+  "workers-ai",
+  "responses",
+  "messages",
+])
+
+function isCurrentChatExecutorModel(model: ModelDefinition) {
+  return (
+    (model.lifecycle === "launch" || model.lifecycle === "legacy") &&
+    model.capabilities.includes("chat") &&
+    model.inputs.includes("text") &&
+    model.outputs.includes("text") &&
+    CURRENT_CHAT_PROTOCOLS.has(model.protocol)
+  )
+}
 
 /**
  * Compatibility projection for the current text-chat UI.
- * #5 will replace this minimal shape with workflow-aware public metadata.
+ * Media models and protocols not yet supported by #3 stay in MODEL_CATALOG but
+ * cannot be selected through the existing /api/chat route.
  */
 export const MODELS: GatewayModel[] = MODEL_CATALOG.filter(
-  isServerEnabledModel
+  isCurrentChatExecutorModel
 ).map((model) => ({ id: model.key, name: model.name }))
 
-const defaultModel = MODELS[0]
+const PREFERRED_DEFAULT_MODEL = "@cf/zai-org/glm-5.3-flash"
+const defaultModel = MODELS.find(
+  (model) => model.id === PREFERRED_DEFAULT_MODEL
+)
+
 if (!defaultModel) {
-  throw new Error("The model catalog must contain at least one enabled model.")
+  throw new Error(
+    `Preferred default model ${PREFERRED_DEFAULT_MODEL} is not available to the current chat executor.`
+  )
 }
 
 export const DEFAULT_MODEL = defaultModel.id
 
+/** Resolve any enabled catalog entry for workflow/executor code. */
 export function getModelDefinition(key: string) {
   return findEnabledCatalogModel(MODEL_CATALOG, key)
 }
 
+/** Resolve only models that today's legacy /api/chat executor can actually run. */
+export function getChatModelDefinition(key: string) {
+  const model = getModelDefinition(key)
+  return model && isCurrentChatExecutorModel(model) ? model : undefined
+}
+
 export function isModelAllowed(key: string) {
-  return Boolean(getModelDefinition(key))
+  return Boolean(getChatModelDefinition(key))
 }
 
 export function queryModelCatalog(query: ModelQuery) {
