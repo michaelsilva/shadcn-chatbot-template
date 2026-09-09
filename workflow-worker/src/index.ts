@@ -1,4 +1,5 @@
 export { RuntimeProbeWorkflow } from "./runtime-probe-workflow"
+export { PlanExecutionWorkflow } from "./plan-execution-workflow"
 
 export default {
   async fetch() {

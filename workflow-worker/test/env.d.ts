@@ -5,6 +5,7 @@ declare module "cloudflare:workers" {
     DB: D1Database
     ASSETS_BUCKET: R2Bucket
     RUNTIME_PROBE_WORKFLOW: Workflow
+    PLAN_EXECUTION_WORKFLOW: Workflow
     TEST_MIGRATIONS: D1Migration[]
   }
 }

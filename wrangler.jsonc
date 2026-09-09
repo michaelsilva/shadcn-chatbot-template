@@ -47,6 +47,12 @@
       "class_name": "RuntimeProbeWorkflow",
       "script_name": "shadcn-chatbot-workflows",
     },
+    {
+      "binding": "PLAN_EXECUTION_WORKFLOW",
+      "name": "shadcn-chatbot-plan-execution",
+      "class_name": "PlanExecutionWorkflow",
+      "script_name": "shadcn-chatbot-workflows",
+    },
   ],
   "observability": {
     "enabled": true,

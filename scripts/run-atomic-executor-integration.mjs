@@ -58,20 +58,13 @@ try {
   for (const sourcePath of sourceFiles) {
     let source = await readFile(path.join(root, sourcePath), "utf8")
 
-    // Production aliases and ESM SDK packages are correct for the application.
-    // The disposable CommonJS harness rewrites only its local copies so runtime
-    // tests can isolate our dispatch/transport logic. Full repo typecheck still
-    // validates the real SDK imports and their Cloudflare types.
-    if (sourcePath === "lib/model-catalog-data.ts") {
-      const productionImport = 'from "@/lib/model-catalog"'
-      if (!source.includes(productionImport)) {
-        throw new Error(
-          "Expected production model-catalog alias was not found; integration harness needs review."
-        )
-      }
-      source = source.replace(productionImport, 'from "./model-catalog"')
-    }
-
+    // ESM SDK packages are correct for the application. The disposable
+    // CommonJS harness rewrites only its local copies so runtime tests
+    // can isolate our dispatch/transport logic. Full repo typecheck
+    // still validates the real SDK imports and their Cloudflare types.
+    // (lib/model-catalog-data.ts already uses a relative import — every
+    // source file here is copied flat by basename into the same
+    // directory, so relative lib-internal imports need no rewrite.)
     if (sourcePath === "lib/atomic-executor.ts") {
       for (const packageName of [
         "@ai-sdk/anthropic",
