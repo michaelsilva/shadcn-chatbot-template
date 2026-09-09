@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "reviewedAt": "2026-09-09",
+  "models": {
+    "@cf/zai-org/glm-5.3-flash": {
+      "expectedLifecycle": "launch",
+      "schemaFingerprint": null,
+      "docs": "https://developers.cloudflare.com/workers-ai/models/glm-5.3-flash/"
+    },
+    "@cf/moondream/moondream3.1-9B-A2B": {
+      "expectedLifecycle": "launch",
+      "schemaFingerprint": null,
+      "docs": "https://developers.cloudflare.com/ai/models/%40cf/moondream/moondream3.1-9B-A2B/"
+    },
+    "@cf/deepgram/nova-3": {
+      "expectedLifecycle": "launch",
+      "schemaFingerprint": null,
+      "docs": "https://developers.cloudflare.com/workers-ai/models/nova-3/"
+    }
+  }
+}
