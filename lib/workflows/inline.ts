@@ -5,15 +5,16 @@ import { createWorkflowExecution, updateWorkflowExecutionState } from "../db/wor
  * #24: "Inline streaming chat can use #3 directly while still writing
  * canonical D1 workflow/provenance state" — `inline` does not mean
  * untracked. This is deliberately thin: no plan/step machinery, no
- * Cloudflare Workflow instance. Full conversation/message persistence
- * for chat is #28's job; this only records that the request happened.
+ * Cloudflare Workflow instance. #28 wires the actual conversation
+ * message persistence and server-owned context assembly around it.
  */
 export async function recordInlineChatExecution(
   env: LedgerEnv,
-  input: { ownerId: string; requestedModelKey: string }
+  input: { ownerId: string; conversationId: string; requestedModelKey: string }
 ) {
   return createWorkflowExecution(env, {
     ownerId: input.ownerId,
+    conversationId: input.conversationId,
     workflowId: "chat",
     workflowVersion: "1",
     executionClass: "inline",
