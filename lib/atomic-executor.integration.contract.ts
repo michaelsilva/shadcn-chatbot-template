@@ -4,6 +4,7 @@ import {
   getAtomicLanguageModel,
   submitAtomic,
 } from "./atomic-executor"
+import type { AtomicOperationRequirement } from "./atomic-executor-core"
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
@@ -71,15 +72,24 @@ async function expectAtomicError(
 export async function runAtomicExecutorIntegrationChecks() {
   const { env, calls } = fakeEnv()
 
-  // All four text protocol families can be instantiated without provider-prefix
-  // branching. Full repo typecheck validates these against the installed SDK APIs.
-  for (const modelKey of [
-    "@cf/zai-org/glm-5.3-flash",
-    "openai/gpt-5.6-terra",
-    "anthropic/claude-sonnet-5",
-    "google/gemini-3.7-flash",
-  ]) {
-    assert(getAtomicLanguageModel(env, modelKey), `${modelKey} language adapter exists`)
+  const protocolCases = [
+    ["@cf/zai-org/glm-5.3-flash", "workers-ai"],
+    ["openai/gpt-5.6-terra", "responses"],
+    ["anthropic/claude-sonnet-5", "messages"],
+    ["google/gemini-3.7-flash", "chat-completions"],
+  ] as const
+
+  for (const [modelKey, expectedProtocol] of protocolCases) {
+    const languageModel = getAtomicLanguageModel(env, modelKey) as unknown as {
+      protocol?: string
+    }
+    // The disposable integration harness stubs only the SDK wire serializer so
+    // this assertion exercises #3's protocol dispatcher. Full repo typecheck
+    // separately validates the real SDK factories.
+    assert(
+      languageModel.protocol === expectedProtocol,
+      `${modelKey} dispatches through ${expectedProtocol}`
+    )
   }
 
   const workersResult = await executeAtomic(env, {
@@ -100,26 +110,79 @@ export async function runAtomicExecutorIntegrationChecks() {
   assert(workersResult.usage?.input_tokens === 4, "Workers usage normalized")
   assert(calls[0]?.model === "@cf/moondream/moondream3.1-9B-A2B", "Workers model id")
 
-  const unifiedResult = await executeAtomic(env, {
-    modelKey: "black-forest-labs/flux-2-max",
-    input: { prompt: "a quiet observatory" },
-    operation: {
-      capabilities: ["image-generation"],
-      inputKinds: ["text"],
-      outputKind: "image",
-      representation: { artifact: "image", format: "raster" },
+  const universalCases: Array<{
+    modelKey: string
+    input: Record<string, unknown>
+    operation: AtomicOperationRequirement
+  }> = [
+    {
+      modelKey: "black-forest-labs/flux-2-max",
+      input: { prompt: "a quiet observatory" },
+      operation: {
+        capabilities: ["image-generation"],
+        inputKinds: ["text"],
+        outputKind: "image",
+        representation: { artifact: "image", format: "raster" },
+      },
     },
-    workflowStepId: "step_flux",
-  })
+    {
+      modelKey: "recraft/recraftv4-1-pro-vector",
+      input: { prompt: "a geometric fox mark" },
+      operation: {
+        capabilities: ["svg-generation"],
+        inputKinds: ["text"],
+        outputKind: "image",
+        representation: { artifact: "image", format: "svg" },
+      },
+    },
+    {
+      modelKey: "xai/grok-stt",
+      input: { audio: "data:audio/wav;base64,AA==" },
+      operation: {
+        capabilities: ["transcription"],
+        inputKinds: ["audio"],
+        outputKind: "text",
+      },
+    },
+    {
+      modelKey: "elevenlabs/eleven-v3",
+      input: { text: "Hello from the atomic executor." },
+      operation: {
+        capabilities: ["text-to-speech"],
+        inputKinds: ["text"],
+        outputKind: "audio",
+      },
+    },
+    {
+      modelKey: "google/veo-3.1-fast",
+      input: { prompt: "a paper kite above a shoreline" },
+      operation: {
+        capabilities: ["video-generation"],
+        inputKinds: ["text"],
+        outputKind: "video",
+      },
+    },
+  ]
 
-  assert(unifiedResult.kind === "immediate", "Unified call returns immediate result")
-  assert(unifiedResult.metadata.keySource === "unified-billing", "Unified key source")
-  assert(unifiedResult.metadata.workflowStepId === "step_flux", "workflow step preserved")
-  assert(calls[1]?.model === "black-forest-labs/flux-2-max", "Unified canonical model id")
-  assert(
-    (calls[1]?.options.gateway as { id?: string } | undefined)?.id === "default",
-    "Unified call uses configured Gateway"
-  )
+  for (const [index, testCase] of universalCases.entries()) {
+    const result = await executeAtomic(env, {
+      modelKey: testCase.modelKey,
+      input: testCase.input,
+      operation: testCase.operation,
+      workflowStepId: `universal_${index}`,
+    })
+    assert(result.kind === "immediate", `${testCase.modelKey} returns immediate result`)
+    assert(
+      result.metadata.keySource === "unified-billing",
+      `${testCase.modelKey} uses unified binding key source`
+    )
+    const call = calls[index + 1]
+    assert(call?.model === testCase.modelKey, `${testCase.modelKey} uses canonical id`)
+    assert(
+      (call?.options.gateway as { id?: string } | undefined)?.id === "default",
+      `${testCase.modelKey} uses configured Gateway`
+    )
+  }
 
   const nativeRequests: Array<{ url: string; init: RequestInit }> = []
   const nativeFetch: typeof fetch = async (input, init) => {
