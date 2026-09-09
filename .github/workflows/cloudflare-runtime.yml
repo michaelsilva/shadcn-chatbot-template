@@ -1,0 +1,48 @@
+name: Cloudflare runtime
+
+on:
+  pull_request:
+    paths:
+      - "wrangler.jsonc"
+      - "workflow-worker/**"
+      - "migrations/**"
+      - "lib/runtime-probe*.ts"
+      - "app/api/workflows/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/cloudflare-runtime.yml"
+  push:
+    branches: [main]
+    paths:
+      - "wrangler.jsonc"
+      - "workflow-worker/**"
+      - "migrations/**"
+      - "lib/runtime-probe*.ts"
+      - "app/api/workflows/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/cloudflare-runtime.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm workflow:test
