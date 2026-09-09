@@ -7,7 +7,7 @@ import {
   toUIMessageStream,
 } from "ai"
 
-import { getCloudflareModel } from "@/lib/ai"
+import { getAtomicLanguageModel } from "@/lib/atomic-executor"
 import { DEFAULT_MODEL, getChatModelDefinition } from "@/lib/models"
 import { getTools, type ChatUIMessage } from "@/lib/tools"
 
@@ -27,11 +27,12 @@ export async function POST(req: Request) {
 
   const { env } = await getCloudflareContext({ async: true })
   const upstreamModelId = modelDefinition.upstreamModelId
+  const supportsTools = modelDefinition.capabilities.includes("tool-calling")
 
   const result = streamText({
-    model: getCloudflareModel(env, upstreamModelId),
+    model: getAtomicLanguageModel(env, modelKey),
     messages: await convertToModelMessages(messages),
-    tools: getTools(upstreamModelId),
+    tools: supportsTools ? getTools(upstreamModelId) : undefined,
     stopWhen: isStepCount(5),
   })
 
@@ -43,10 +44,12 @@ export async function POST(req: Request) {
         const message = error instanceof Error ? error.message : String(error)
         console.error(
           JSON.stringify({
-            event: "ai_gateway_request_failed",
+            event: "atomic_ai_request_failed",
             message,
             model: modelKey,
             upstreamModel: upstreamModelId,
+            transport: modelDefinition.transport,
+            protocol: modelDefinition.protocol,
           })
         )
 
