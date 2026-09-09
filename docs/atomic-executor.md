@@ -129,9 +129,9 @@ Immediate and submitted results expose:
   - `workers-binding`
   - `unified-billing`
   - `provider-key`
-- routing result with `fallbackUsed: false`
+- routing result with `fallbackUsed`
 
-Fallback remains false in #3 by design. #13 may resolve a compatible fallback later and record that outcome through this existing metadata seam.
+Fallback resolution, Gateway cache/timeout/retry policy, and the request attribution metadata attached to every call are #13's job, not #3's — see [`docs/ai-gateway-policy.md`](./ai-gateway-policy.md).
 
 ## Error contract
 
@@ -161,6 +161,7 @@ HTTP 429, timeout-class responses, and 5xx failures are marked retryable. Most 4
 - malformed upstream JSON
 - HTTP error classification and retryability
 - queue-state normalization
+- #13's Gateway policy resolution and fallback-candidate compatibility (capability *and* parameter-schema)
 
 `pnpm atomic:integration` executes the actual atomic executor module against mocked Cloudflare/Fal transports. The disposable harness stubs only the SDK wire serializers; the normal repository typecheck validates the real installed SDK factories and Cloudflare overloads. It covers:
 
@@ -173,6 +174,8 @@ HTTP 429, timeout-class responses, and 5xx failures are marked retryable. Most 4
 - arbitrary model/target rejection
 - queue/immediate misuse
 - retryable provider-native upstream failures
+- #13's cache/timeout/metadata policy reaching both `env.AI.run()`'s `gateway` option and provider-native `cf-aig-*` headers
+- #13's compatible-fallback success, incompatible-fallback rejection, and non-retryable-failure-never-falls-back cases
 
 The dedicated `Atomic executor` GitHub Actions workflow runs full `pnpm typecheck`, `pnpm atomic:contract`, and `pnpm atomic:integration` on every relevant PR or `main` change.
 

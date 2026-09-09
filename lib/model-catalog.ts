@@ -258,6 +258,17 @@ export interface ModelDefinition {
   license?: string
   zeroDataRetention?: ZeroDataRetention
   verification: ModelVerification
+  /**
+   * #13: ordered catalog keys to try when this model's atomic execution
+   * fails with a retryable error. Declared statically so fallback can
+   * never silently cross an incompatible transport/protocol boundary —
+   * `assertValidModelCatalog` requires every entry to share this
+   * model's `transport`/`protocol` (the same request `input` shape is
+   * therefore valid for both). Whether a specific fallback is actually
+   * used for a given call still depends on it supporting that call's
+   * declared `AtomicOperationRequirement` at request time.
+   */
+  fallbackModelKeys?: readonly string[]
 }
 
 /**
@@ -363,6 +374,7 @@ export function findEnabledCatalogModel(
 
 export function assertValidModelCatalog(catalog: readonly ModelDefinition[]) {
   const keys = new Set<string>()
+  const byKey = new Map<string, ModelDefinition>()
 
   for (const model of catalog) {
     if (!model.key.trim()) throw new Error("Model catalog key cannot be empty.")
@@ -373,6 +385,7 @@ export function assertValidModelCatalog(catalog: readonly ModelDefinition[]) {
       throw new Error(`Duplicate model catalog key: ${model.key}`)
     }
     keys.add(model.key)
+    byKey.set(model.key, model)
 
     if (!model.inputs.length) {
       throw new Error(`Model ${model.key} must declare at least one input kind.`)
@@ -387,6 +400,33 @@ export function assertValidModelCatalog(catalog: readonly ModelDefinition[]) {
       if (!model.outputs.includes(representation.artifact)) {
         throw new Error(
           `Model ${model.key} declares ${representation.artifact}/${representation.format} without that output artifact.`
+        )
+      }
+    }
+  }
+
+  /**
+   * #13: fallback keys are validated in a second pass (they may point
+   * forward in the array) and are restricted to the same
+   * transport+protocol as the primary entry — that is what guarantees
+   * the primary's `request.input` shape stays valid if the fallback is
+   * ever actually invoked. Never silently alias one model/endpoint id
+   * to another.
+   */
+  for (const model of catalog) {
+    for (const fallbackKey of model.fallbackModelKeys ?? []) {
+      if (fallbackKey === model.key) {
+        throw new Error(`Model ${model.key} cannot declare itself as a fallback.`)
+      }
+      const fallback = byKey.get(fallbackKey)
+      if (!fallback) {
+        throw new Error(
+          `Model ${model.key} declares an unknown fallback catalog key: ${fallbackKey}`
+        )
+      }
+      if (fallback.transport !== model.transport || fallback.protocol !== model.protocol) {
+        throw new Error(
+          `Model ${model.key} declares fallback ${fallbackKey} with an incompatible transport/protocol.`
         )
       }
     }

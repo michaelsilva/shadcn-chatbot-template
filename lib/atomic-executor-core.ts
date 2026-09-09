@@ -50,12 +50,21 @@ export interface AtomicOperationRequirement {
   representation?: OutputRepresentationSelector
 }
 
-export interface AtomicRequestBase {
+/**
+ * #13: the small, trusted attribution dimension attached to every Gateway
+ * call as `metadata` — never prompt/media content. `ownerId` is the D1
+ * owner (#6/#15 authorization boundary), not a browser-supplied value.
+ */
+export interface AtomicRequestContext {
+  ownerId?: string
+  correlationId?: string
+  workflowStepId?: string
+}
+
+export interface AtomicRequestBase extends AtomicRequestContext {
   modelKey: string
   input: Record<string, unknown>
   operation?: AtomicOperationRequirement
-  correlationId?: string
-  workflowStepId?: string
   signal?: AbortSignal
 }
 
@@ -197,6 +206,27 @@ export function validateConfiguredParameters(
   }
 }
 
+/**
+ * #13: does this catalog entry actually support the calling request —
+ * both the declared operation shape and its own parameter schema
+ * against the same `request.input`? Used to filter `fallbackModelKeys`
+ * candidates, which share transport/protocol with the primary but may
+ * still declare a different parameter schema (e.g. different `select`
+ * options), so falling back must not skip that check.
+ */
+export function fallbackCandidateSupportsRequest(
+  model: ModelDefinition,
+  request: Pick<AtomicRequestBase, "input" | "operation">
+): boolean {
+  try {
+    assertOperationSupported(model, request.operation)
+    validateConfiguredParameters(model, request.input)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function validateAtomicRequestAgainstModel(
   model: ModelDefinition,
   request: AtomicRequestBase
@@ -222,6 +252,70 @@ export function validateAtomicRequestAgainstModel(
   assertOperationSupported(model, request.operation)
   validateConfiguredParameters(model, request.input)
   return model
+}
+
+/**
+ * #13: the AI Gateway routing policy for one atomic call — cache,
+ * request timeout, and retry behavior — plus the trusted metadata
+ * dimension attached for later attribution/observability (#14).
+ * Deliberately transport-agnostic: `executeAtomic()`/`getAtomicLanguageModel()`
+ * translate this into `env.AI.run()`'s `gateway` option object, and the
+ * provider-native path translates it into `cf-aig-*` headers, but the
+ * policy itself is decided once, here, from catalog/request shape only.
+ */
+export interface AtomicGatewayPolicy {
+  metadata: Record<string, string>
+  skipCache: boolean
+  requestTimeoutMs: number
+  /**
+   * Deliberately `undefined` for every v0.1 execution class. Cloudflare
+   * Gateway's automatic retry re-sends the same request to the same
+   * model on failure, but the Gateway cannot know whether an upstream
+   * provider already started billable generation work before returning
+   * an error — enabling it here would risk a duplicate paid job on top
+   * of every transient 5xx/timeout, which is exactly the "unbounded
+   * duplicate paid generation" failure #10 exists to prevent. #10's
+   * submission idempotency (an app-owned idempotency key the provider
+   * can de-duplicate against) is the prerequisite for turning this on
+   * for the execution classes it covers; this field stays typed and
+   * threaded through so that follow-up work is a policy change here,
+   * not a new mechanism.
+   */
+  retries?: {
+    maxAttempts: 1 | 2 | 3 | 4 | 5
+    retryDelayMs: number
+    backoff: "constant" | "linear" | "exponential"
+  }
+}
+
+const IMMEDIATE_REQUEST_TIMEOUT_MS = 60_000
+const QUEUE_SUBMIT_REQUEST_TIMEOUT_MS = 15_000
+
+export function resolveAtomicGatewayPolicy(
+  model: ModelDefinition,
+  context: AtomicRequestContext
+): AtomicGatewayPolicy {
+  const metadata: Record<string, string> = {
+    resolved_model_key: model.key,
+  }
+  if (context.ownerId) metadata.owner_id = context.ownerId
+  if (context.correlationId) metadata.correlation_id = context.correlationId
+  if (context.workflowStepId) metadata.workflow_step_id = context.workflowStepId
+
+  return {
+    metadata,
+    // Every current v0.1 execution class is either a unique conversational
+    // turn or a paid generation call; none is a safe, idempotent,
+    // side-effect-free lookup Gateway could correctly de-duplicate by
+    // request-body hash. Skip cache unconditionally until a genuinely
+    // cacheable class exists, and make that an explicit opt-in then.
+    skipCache: true,
+    requestTimeoutMs:
+      model.execution.result === "queued"
+        ? QUEUE_SUBMIT_REQUEST_TIMEOUT_MS
+        : IMMEDIATE_REQUEST_TIMEOUT_MS,
+    retries: undefined,
+  }
 }
 
 export function buildAtomicMetadata(

@@ -96,7 +96,10 @@ export async function POST(req: Request) {
   const supportsTools = modelDefinition.capabilities.includes("tool-calling")
 
   const result = streamText({
-    model: getAtomicLanguageModel(env, modelKey),
+    model: getAtomicLanguageModel(env, modelKey, {
+      ownerId: owner.id,
+      correlationId: execution.id,
+    }),
     messages: toModelMessages(assembled.messages),
     tools: supportsTools ? getTools(upstreamModelId) : undefined,
     stopWhen: isStepCount(5),

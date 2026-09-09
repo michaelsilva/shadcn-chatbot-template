@@ -10,15 +10,18 @@ import {
   buildProviderNativeGatewayUrl,
   extractAtomicRequestId,
   extractAtomicUsage,
+  fallbackCandidateSupportsRequest,
   normalizeAtomicQueueState,
   readAtomicResponsePayload,
   readAtomicStringField,
+  resolveAtomicGatewayPolicy,
   throwAtomicUpstreamError,
   validateAtomicRequestAgainstModel,
   type AtomicExecutionMetadata,
+  type AtomicGatewayPolicy,
   type AtomicImmediatePayload,
-  type AtomicOperationRequirement,
   type AtomicRequestBase,
+  type AtomicRequestContext,
 } from "./atomic-executor-core"
 import { findEnabledCatalogModel, type ModelDefinition } from "./model-catalog"
 import { MODEL_CATALOG } from "./model-catalog-data"
@@ -34,8 +37,8 @@ export {
 
 const PROVIDER_AUTH_PLACEHOLDER = "binding-authenticated"
 
-export interface AtomicExecuteRequest extends AtomicRequestBase {}
-export interface AtomicSubmitRequest extends AtomicRequestBase {}
+export type AtomicExecuteRequest = AtomicRequestBase
+export type AtomicSubmitRequest = AtomicRequestBase
 
 export type AtomicKeySource =
   | "workers-binding"
@@ -145,6 +148,11 @@ function resolveModel(modelKey: string) {
   return model
 }
 
+/** Cloudflare's `GatewayOptions.metadata` shape — primitives only. */
+function toGatewayMetadata(policy: AtomicGatewayPolicy) {
+  return policy.metadata as Record<string, string | number | boolean | null>
+}
+
 export function validateAtomicRequest(request: AtomicRequestBase) {
   const model = resolveModel(request.modelKey)
   return validateAtomicRequestAgainstModel(model, request)
@@ -170,7 +178,7 @@ function buildResultMetadata(
     routing: {
       requestedModelKey: request.modelKey,
       resolvedModelKey: model.key,
-      fallbackUsed: false,
+      fallbackUsed: model.key !== request.modelKey,
     },
   }
 }
@@ -207,14 +215,21 @@ function parseProtocolRequestBody(body: BodyInit | null | undefined) {
 
 function createBindingProtocolFetch(
   env: AtomicExecutorEnv,
-  model: ModelDefinition
+  model: ModelDefinition,
+  context: AtomicRequestContext
 ): typeof fetch {
+  const policy = resolveAtomicGatewayPolicy(model, context)
   return async (_input, init) => {
     const response = await env.AI.run(
       model.upstreamModelId,
       parseProtocolRequestBody(init?.body),
       {
-        gateway: { id: env.CLOUDFLARE_AI_GATEWAY_ID },
+        gateway: {
+          id: env.CLOUDFLARE_AI_GATEWAY_ID,
+          skipCache: policy.skipCache,
+          requestTimeoutMs: policy.requestTimeoutMs,
+          metadata: toGatewayMetadata(policy),
+        },
         returnRawResponse: true,
         ...(init?.signal ? { signal: init.signal } : {}),
       }
@@ -259,21 +274,36 @@ export function assertLanguageModel(model: ModelDefinition) {
 /**
  * Returns one Vercel AI SDK language model selected entirely from catalog
  * protocol metadata. Provider names are not used to choose the protocol.
+ *
+ * `context` carries #13's Gateway attribution metadata (owner/conversation
+ * correlation, never prompt content) — this is the streaming chat path
+ * (#28's `app/api/chat/route.ts`), so it is the one place that metadata
+ * actually originates from a real request rather than a workflow step.
  */
-export function getAtomicLanguageModel(env: AtomicExecutorEnv, modelKey: string) {
+export function getAtomicLanguageModel(
+  env: AtomicExecutorEnv,
+  modelKey: string,
+  context: AtomicRequestContext = {}
+) {
   const model = resolveModel(modelKey)
   assertLanguageModel(model)
   const atomicEnv = env as AtomicExecutorEnv
+  const policy = resolveAtomicGatewayPolicy(model, context)
 
   if (model.protocol === "workers-ai") {
     const workersAI = createWorkersAI({
       binding: env.AI,
-      gateway: { id: env.CLOUDFLARE_AI_GATEWAY_ID },
+      gateway: {
+        id: env.CLOUDFLARE_AI_GATEWAY_ID,
+        skipCache: policy.skipCache,
+        requestTimeoutMs: policy.requestTimeoutMs,
+        metadata: toGatewayMetadata(policy),
+      },
     })
     return workersAI(model.upstreamModelId)
   }
 
-  const protocolFetch = createBindingProtocolFetch(atomicEnv, model)
+  const protocolFetch = createBindingProtocolFetch(atomicEnv, model, context)
 
   if (model.protocol === "messages") {
     const anthropic = createAnthropic({
@@ -300,10 +330,16 @@ async function runBindingAtomic(
   model: ModelDefinition,
   request: AtomicExecuteRequest
 ): Promise<AtomicImmediateResult> {
+  const policy = resolveAtomicGatewayPolicy(model, request)
   let response: Response
   try {
     response = (await env.AI.run(model.upstreamModelId, request.input, {
-      gateway: { id: env.CLOUDFLARE_AI_GATEWAY_ID },
+      gateway: {
+        id: env.CLOUDFLARE_AI_GATEWAY_ID,
+        skipCache: policy.skipCache,
+        requestTimeoutMs: policy.requestTimeoutMs,
+        metadata: toGatewayMetadata(policy),
+      },
       returnRawResponse: true,
       ...(request.signal ? { signal: request.signal } : {}),
     })) as unknown as Response
@@ -349,7 +385,8 @@ function providerNativeAdapter(model: ModelDefinition) {
 function providerNativeHeaders(
   env: AtomicExecutorEnv,
   adapter: ProviderNativeAdapter,
-  mode: ProviderAuthMode
+  mode: ProviderAuthMode,
+  policy: AtomicGatewayPolicy
 ) {
   const token = requireEnvString(env, adapter.authEnv, adapter.authEnv)
   const authPrefix =
@@ -359,6 +396,12 @@ function providerNativeHeaders(
   const headers = new Headers({
     Authorization: `${authPrefix} ${token}`,
     "Content-Type": "application/json",
+    // #13: same cache/timeout/metadata policy as the binding transport,
+    // expressed as Cloudflare's documented `cf-aig-*` request headers
+    // since the provider-native path is a direct fetch, not env.AI.run().
+    "cf-aig-skip-cache": String(policy.skipCache),
+    "cf-aig-request-timeout": String(policy.requestTimeoutMs),
+    "cf-aig-metadata": JSON.stringify(policy.metadata),
   })
 
   const gatewayToken = getEnvString(env, "CLOUDFLARE_AI_GATEWAY_TOKEN")
@@ -400,7 +443,8 @@ async function callProviderNative(
 ) {
   if (options.route) assertSafeProviderRoute(options.route)
   const adapter = providerNativeAdapter(model)
-  const headers = providerNativeHeaders(env, adapter, options.mode)
+  const policy = resolveAtomicGatewayPolicy(model, request)
+  const headers = providerNativeHeaders(env, adapter, options.mode, policy)
   if (options.targetUrl) headers.set("x-fal-target-url", options.targetUrl)
 
   try {
@@ -453,7 +497,35 @@ async function executeProviderNative(
   }
 }
 
-/** Execute exactly one immediate-capable trusted catalog entry. */
+async function runAtomicTransport(
+  env: AtomicExecutorEnv,
+  model: ModelDefinition,
+  request: AtomicExecuteRequest,
+  runtime: AtomicExecutorRuntime
+): Promise<AtomicImmediateResult> {
+  if (model.transport === "gateway-provider-native") {
+    if (model.execution.result === "queued") {
+      throw new AtomicExecutionError(
+        "UNSUPPORTED_OPERATION",
+        `${model.key} is queue-only; submit it with submitAtomic().`
+      )
+    }
+    return executeProviderNative(env, model, request, runtime)
+  }
+
+  return runBindingAtomic(env, model, request)
+}
+
+/**
+ * Execute exactly one immediate-capable trusted catalog entry, falling
+ * back to #13's declared `fallbackModelKeys` only when the primary
+ * attempt fails with a retryable error and the candidate is both
+ * enabled and actually compatible with this call's declared operation
+ * (never a blind cross-capability substitution). A non-retryable
+ * failure (auth, payment, validation) is never masked by a fallback —
+ * see #28's already-verified "payment-required surfaces to the user"
+ * behavior, which this preserves unchanged.
+ */
 export async function executeAtomic(
   env: AtomicExecutorEnv,
   request: AtomicExecuteRequest,
@@ -462,17 +534,28 @@ export async function executeAtomic(
   const model = validateAtomicRequest(request)
   const atomicEnv = env as AtomicExecutorEnv
 
-  if (model.transport === "gateway-provider-native") {
-    if (model.execution.result === "queued") {
-      throw new AtomicExecutionError(
-        "UNSUPPORTED_OPERATION",
-        `${model.key} is queue-only; submit it with submitAtomic().`
-      )
-    }
-    return executeProviderNative(atomicEnv, model, request, runtime)
-  }
+  try {
+    return await runAtomicTransport(atomicEnv, model, request, runtime)
+  } catch (error) {
+    if (!(error instanceof AtomicExecutionError) || !error.retryable) throw error
+    if (!model.fallbackModelKeys?.length) throw error
 
-  return runBindingAtomic(atomicEnv, model, request)
+    for (const fallbackKey of model.fallbackModelKeys) {
+      const fallback = findEnabledCatalogModel(MODEL_CATALOG, fallbackKey)
+      if (!fallback || !fallbackCandidateSupportsRequest(fallback, request)) continue
+
+      try {
+        return await runAtomicTransport(atomicEnv, fallback, request, runtime)
+      } catch (fallbackError) {
+        if (!(fallbackError instanceof AtomicExecutionError) || !fallbackError.retryable) {
+          throw fallbackError
+        }
+        // Retryable fallback failure: keep trying the remaining chain.
+      }
+    }
+
+    throw error
+  }
 }
 
 /**
