@@ -1,6 +1,7 @@
 import {
   ConversationMessageSchema,
   type ConversationMessage,
+  type ConversationPart,
   type JsonValue,
   type ToolPart,
 } from "./conversation"
@@ -70,7 +71,7 @@ function mapToolPart(
 export function chatUIMessageToConversationMessage(
   message: ChatUIMessage
 ): ConversationMessage {
-  const parts = message.parts.flatMap((part, index) => {
+  const parts = message.parts.flatMap((part, index): ConversationPart[] => {
     const id = canonicalPartId(message.id, index)
 
     if (part.type === "text") {

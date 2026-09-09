@@ -25,6 +25,26 @@ function assertThrows(fn: () => unknown, message: string) {
   throw new Error(`${message}: expected error`)
 }
 
+/**
+ * JSON.stringify is key-order sensitive, but zod re-emits object keys in
+ * schema-declaration order rather than input order. Round-trip assertions
+ * must compare structurally, not by raw serialized string.
+ */
+function canonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJson)
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    return Object.fromEntries(entries.map(([k, v]) => [k, canonicalJson(v)]))
+  }
+  return value
+}
+
+function deepEqual(a: unknown, b: unknown) {
+  return JSON.stringify(canonicalJson(a)) === JSON.stringify(canonicalJson(b))
+}
+
 const provenance = {
   executionId: "exec_1",
   workflowExecutionId: "wf_1",
@@ -238,7 +258,7 @@ export function runConversationContractChecks() {
     const parsed = ConversationPartSchema.parse(part)
     seenTypes.add(parsed.type)
     assert(
-      JSON.stringify(parsed) === JSON.stringify(part),
+      deepEqual(parsed, part),
       `${part.type} part round-trips through runtime schema`
     )
   }
@@ -271,7 +291,7 @@ export function runConversationContractChecks() {
 
   const parsedMessage = parseConversationMessage(serializeConversationMessage(message))
   assert(
-    JSON.stringify(parsedMessage) === JSON.stringify(ConversationMessageSchema.parse(message)),
+    deepEqual(parsedMessage, ConversationMessageSchema.parse(message)),
     "complete multimodal message serialization round-trips"
   )
 
@@ -285,8 +305,7 @@ export function runConversationContractChecks() {
     statusText: "Rendering",
   })
   assert(
-    JSON.stringify(parseConversationEvent(serializeConversationEvent(event))) ===
-      JSON.stringify(event),
+    deepEqual(parseConversationEvent(serializeConversationEvent(event)), event),
     "generation event serialization round-trips"
   )
 

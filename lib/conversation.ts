@@ -47,16 +47,18 @@ export const AssetReferenceSchema = z.object({
 })
 export type AssetReference = z.infer<typeof AssetReferenceSchema>
 
-export const OwnerScopedIdentityLinkSchema = z.object({
-  identityId: z.string().min(1),
-  kind: z.enum([
-    "cloned-voice",
-    "designed-voice",
-    "reference-voice",
-    "speaker-embedding",
-    "custom-element",
-  ]),
-})
+export const OwnerScopedIdentityLinkSchema = z
+  .object({
+    identityId: z.string().min(1),
+    kind: z.enum([
+      "cloned-voice",
+      "designed-voice",
+      "reference-voice",
+      "speaker-embedding",
+      "custom-element",
+    ]),
+  })
+  .strict()
 export type OwnerScopedIdentityLink = z.infer<
   typeof OwnerScopedIdentityLinkSchema
 >

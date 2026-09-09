@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit",
     "atomic:contract": "rm -rf /tmp/shadcn-atomic-contract && tsc lib/atomic-executor-core.ts lib/atomic-executor-core.contract.ts --module commonjs --moduleResolution node --target es2022 --lib es2022,dom --outDir /tmp/shadcn-atomic-contract --skipLibCheck && node /tmp/shadcn-atomic-contract/atomic-executor-core.contract.js",
     "atomic:integration": "node scripts/run-atomic-executor-integration.mjs",
+    "conversation:contract": "rm -rf /tmp/shadcn-conversation-contract && tsc lib/conversation.ts lib/conversation.contract.ts --module commonjs --moduleResolution node --target es2022 --lib es2022,dom --outDir /tmp/shadcn-conversation-contract --skipLibCheck && NODE_PATH=\"$PWD/node_modules\" node /tmp/shadcn-conversation-contract/conversation.contract.js",
     "catalog:validate-workers": "node scripts/validate-workers-ai-catalog.mjs",
     "catalog:validate-workers:remote": "node scripts/validate-workers-ai-catalog.mjs --remote-required",
     "catalog:refresh-workers": "node scripts/validate-workers-ai-catalog.mjs --refresh"
