@@ -1,0 +1,49 @@
+name: Model catalog
+
+on:
+  pull_request:
+    paths:
+      - "catalog/**"
+      - "lib/model-catalog*.ts"
+      - "scripts/validate-workers-ai-catalog.mjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/model-catalog.yml"
+  push:
+    branches: [main]
+    paths:
+      - "catalog/**"
+      - "lib/model-catalog*.ts"
+      - "scripts/validate-workers-ai-catalog.mjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/model-catalog.yml"
+  schedule:
+    - cron: "17 12 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm catalog:validate-workers
