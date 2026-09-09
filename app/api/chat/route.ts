@@ -8,28 +8,30 @@ import {
 } from "ai"
 
 import { getCloudflareModel } from "@/lib/ai"
-import { DEFAULT_MODEL, isModelAllowed } from "@/lib/models"
+import { DEFAULT_MODEL, getModelDefinition } from "@/lib/models"
 import { getTools, type ChatUIMessage } from "@/lib/tools"
 
 export async function POST(req: Request) {
   const { messages, model }: { messages: ChatUIMessage[]; model?: string } =
     await req.json()
 
-  const modelId = model ?? DEFAULT_MODEL
+  const modelKey = model ?? DEFAULT_MODEL
+  const modelDefinition = getModelDefinition(modelKey)
 
-  if (!isModelAllowed(modelId)) {
+  if (!modelDefinition) {
     return Response.json(
-      { error: `Model ${modelId} is not available.` },
+      { error: `Model ${modelKey} is not available.` },
       { status: 400 }
     )
   }
 
   const { env } = await getCloudflareContext({ async: true })
+  const upstreamModelId = modelDefinition.upstreamModelId
 
   const result = streamText({
-    model: getCloudflareModel(env, modelId),
+    model: getCloudflareModel(env, upstreamModelId),
     messages: await convertToModelMessages(messages),
-    tools: getTools(modelId),
+    tools: getTools(upstreamModelId),
     stopWhen: isStepCount(5),
   })
 
@@ -43,7 +45,8 @@ export async function POST(req: Request) {
           JSON.stringify({
             event: "ai_gateway_request_failed",
             message,
-            model: modelId,
+            model: modelKey,
+            upstreamModel: upstreamModelId,
           })
         )
 
