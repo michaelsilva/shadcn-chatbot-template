@@ -4,17 +4,17 @@
   "models": {
     "@cf/zai-org/glm-5.3-flash": {
       "expectedLifecycle": "launch",
-      "schemaFingerprint": null,
+      "schemaFingerprint": "sha256:53d8229da1896a712c1f620b8d5b0ea54ad27530164921135f0d57750c30218b",
       "docs": "https://developers.cloudflare.com/workers-ai/models/glm-5.3-flash/"
     },
     "@cf/moondream/moondream3.1-9B-A2B": {
       "expectedLifecycle": "launch",
-      "schemaFingerprint": null,
+      "schemaFingerprint": "sha256:2789d1d9b610cfe4e82a3bd2d0bdcf0f0657e34bee631e96d1c5a3d34ec373a9",
       "docs": "https://developers.cloudflare.com/ai/models/%40cf/moondream/moondream3.1-9B-A2B/"
     },
     "@cf/deepgram/nova-3": {
       "expectedLifecycle": "launch",
-      "schemaFingerprint": null,
+      "schemaFingerprint": "sha256:b11f70535dec0176681d70e9304194ff1805d081b372eeb194e325922391eddb",
       "docs": "https://developers.cloudflare.com/workers-ai/models/nova-3/"
     }
   }
