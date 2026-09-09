@@ -21,15 +21,15 @@ const sourceFiles = [
 ]
 
 const sdkStub = `
-export function createWorkersAI() {
+export function createWorkersAI(_options?: unknown) {
   return (modelId: string) => ({ protocol: "workers-ai", modelId })
 }
 
-export function createAnthropic() {
+export function createAnthropic(_options?: unknown) {
   return (modelId: string) => ({ protocol: "messages", modelId })
 }
 
-export function createOpenAI() {
+export function createOpenAI(_options?: unknown) {
   return {
     responses(modelId: string) {
       return { protocol: "responses", modelId }
