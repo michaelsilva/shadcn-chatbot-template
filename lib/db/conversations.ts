@@ -201,6 +201,56 @@ export async function appendMessage(
   })
 }
 
+/**
+ * #29: replaces every part of an existing message with a new set,
+ * scoped by an explicit `conversationId` join so a message id from one
+ * conversation can never be mutated through another. Used only for a
+ * `ask_user`-style continuation: the assistant message the model
+ * generated the tool call in is the *same* message the client resubmits
+ * once answered (same `role`, same `sequence`) — only its parts'
+ * `state`/`output` change, so this updates parts in place rather than
+ * appending a new message (which `appendMessage()` cannot safely do
+ * twice for the same id — see the message_parts primary-key note on
+ * `appendMessage`).
+ *
+ * Returns `false` (no-op) if `messageId` does not belong to
+ * `conversationId` — this is #29's "HITL continuation cannot be forged
+ * by replaying a browser-crafted historical tool result" boundary: a
+ * client cannot cause an update to a message it doesn't already own.
+ */
+export async function replaceMessageParts(
+  env: LedgerEnv,
+  input: { conversationId: string; messageId: string; parts: ConversationPart[] }
+): Promise<boolean> {
+  const message = await env.DB.prepare(
+    `SELECT id FROM messages WHERE id = ?1 AND conversation_id = ?2`
+  )
+    .bind(input.messageId, input.conversationId)
+    .first<{ id: string }>()
+  if (!message) return false
+
+  const validatedParts = input.parts.map((part) => ConversationPartSchema.parse(part))
+  const now = isoNow()
+
+  const statements = [
+    env.DB.prepare(`DELETE FROM message_parts WHERE message_id = ?1`).bind(input.messageId),
+    ...validatedParts.map((part, index) => {
+      const { assetId, identityId } = extractPartQueryColumns(part)
+      return env.DB.prepare(
+        `INSERT INTO message_parts (id, message_id, ordinal, part_type, data_json, asset_id, identity_id, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
+      ).bind(part.id, input.messageId, index, part.type, JSON.stringify(part), assetId, identityId, now)
+    }),
+    env.DB.prepare(`UPDATE conversations SET updated_at = ?1 WHERE id = ?2`).bind(
+      now,
+      input.conversationId
+    ),
+  ]
+
+  await env.DB.batch(statements)
+  return true
+}
+
 interface MessagePartJoinRow {
   message_id: string
   role: string
