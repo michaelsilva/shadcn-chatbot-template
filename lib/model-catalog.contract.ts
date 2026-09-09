@@ -24,11 +24,21 @@ const CONTRACT_FIXTURES = assertValidModelCatalog([
     roles: ["balanced"],
     inputs: ["text", "image"],
     outputs: ["text"],
-    capabilities: ["chat", "vision", "reasoning", "tool-calling"],
+    capabilities: [
+      "chat",
+      "vision",
+      "reasoning",
+      "tool-calling",
+      "structured-output",
+      "ocr",
+      "image-captioning",
+      "object-detection",
+    ],
     representations: [{ artifact: "text", format: "markdown" }],
     execution: { result: "immediate", streaming: true },
     tools: { appTools: true, nativeTools: ["web-search"] },
     reasoning: { supported: true, controls: ["effort"] },
+    continuation: { mode: "provider-state" },
     limits: { contextTokens: 128_000, maxOutputTokens: 16_000 },
     verification: { lastVerifiedAt: "2026-09-09", docs: [] },
   },
@@ -47,8 +57,15 @@ const CONTRACT_FIXTURES = assertValidModelCatalog([
     capabilities: [
       "image-generation",
       "image-edit",
+      "image-inpaint",
+      "image-outpaint",
+      "image-object-removal",
+      "image-relighting",
+      "image-multi-reference",
+      "image-mask-input",
       "background-removal",
       "upscale-faithful",
+      "upscale-creative",
     ],
     representations: [
       {
@@ -103,7 +120,11 @@ const CONTRACT_FIXTURES = assertValidModelCatalog([
     roles: ["specialist", "workers-hosted"],
     inputs: ["audio"],
     outputs: ["text"],
-    capabilities: ["transcription", "diarization"],
+    capabilities: [
+      "transcription",
+      "diarization",
+      "speech-language-detection",
+    ],
     representations: [{ artifact: "text", format: "transcript" }],
     execution: { result: "immediate", streaming: false },
     verification: { lastVerifiedAt: "2026-09-09", docs: [] },
@@ -129,8 +150,29 @@ const CONTRACT_FIXTURES = assertValidModelCatalog([
         codecs: ["mp3", "pcm_s16le"],
       },
     ],
-    identityInputs: ["builtin-voice", "cloned-voice", "designed-voice"],
+    identityInputs: [
+      "builtin-voice",
+      "cloned-voice",
+      "designed-voice",
+      "reference-voice",
+    ],
     execution: { result: "immediate", streaming: true },
+    verification: { lastVerifiedAt: "2026-09-09", docs: [] },
+  },
+  {
+    key: "contract/voice-clone",
+    upstreamModelId: "contract/voice-clone",
+    name: "Voice Clone Fixture",
+    provider: "contract",
+    catalogSource: "gateway-provider-native",
+    transport: "gateway-provider-native",
+    protocol: "provider-native",
+    lifecycle: "experimental",
+    inputs: ["audio"],
+    outputs: [],
+    capabilities: ["voice-cloning"],
+    identityOutputs: ["cloned-voice"],
+    execution: { result: "immediate", streaming: false },
     verification: { lastVerifiedAt: "2026-09-09", docs: [] },
   },
   {
@@ -144,7 +186,13 @@ const CONTRACT_FIXTURES = assertValidModelCatalog([
     lifecycle: "experimental",
     inputs: ["text", "audio"],
     outputs: ["audio"],
-    capabilities: ["music-generation", "sound-effect-generation", "audio-to-audio"],
+    capabilities: [
+      "music-generation",
+      "sound-effect-generation",
+      "audio-to-audio",
+      "audio-isolation",
+      "voice-conversion",
+    ],
     representations: [
       { artifact: "audio", format: "audio", containers: ["mp3", "wav"] },
     ],
@@ -162,7 +210,7 @@ const CONTRACT_FIXTURES = assertValidModelCatalog([
     lifecycle: "experimental",
     inputs: ["audio", "video"],
     outputs: ["audio", "video"],
-    capabilities: ["dubbing"],
+    capabilities: ["dubbing", "speaker-preservation"],
     representations: [
       { artifact: "audio", format: "audio", containers: ["mp3"] },
       { artifact: "video", format: "video", containers: ["mp4"] },
@@ -188,7 +236,16 @@ const CONTRACT_FIXTURES = assertValidModelCatalog([
       "video-reference",
       "video-edit",
       "video-continuation",
+      "video-first-frame",
+      "video-last-frame",
+      "video-multi-image-reference",
+      "video-multi-video-reference",
+      "video-audio-reference",
+      "video-multi-shot",
+      "video-element-reference",
       "native-video-audio",
+      "avatar-video",
+      "video-4k",
     ],
     representations: [
       { artifact: "video", format: "video", containers: ["mp4"] },
@@ -208,7 +265,12 @@ const CONTRACT_FIXTURES = assertValidModelCatalog([
     lifecycle: "experimental",
     inputs: ["text", "image", "model3d"],
     outputs: ["model3d"],
-    capabilities: ["text-to-3d", "image-to-3d", "model3d-rigging"],
+    capabilities: [
+      "text-to-3d",
+      "image-to-3d",
+      "model3d-rigging",
+      "model3d-animation",
+    ],
     representations: [
       {
         artifact: "model3d",
@@ -234,14 +296,19 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 export function runModelCatalogContractChecks() {
-  assert(OWNER_SCOPED_VOICE_FIXTURE.ownerId === "owner_1", "identity is owner scoped")
+  assert(
+    OWNER_SCOPED_VOICE_FIXTURE.ownerId === "owner_1",
+    "identity is owner scoped"
+  )
 
   assert(
     filterModelCatalog(CONTRACT_FIXTURES, {
-      capabilities: ["vision"],
+      capabilities: ["vision", "ocr"],
       inputs: ["image"],
       outputs: ["text"],
-    }).map((model) => model.key).join(",") === "contract/text-vision",
+    })
+      .map((model) => model.key)
+      .join(",") === "contract/text-vision",
     "filters by capability and artifact kind"
   )
 
@@ -249,7 +316,9 @@ export function runModelCatalogContractChecks() {
     filterModelCatalog(CONTRACT_FIXTURES, {
       representation: { artifact: "image", format: "svg" },
       lifecycles: ["launch"],
-    }).map((model) => model.key).join(",") === "contract/svg",
+    })
+      .map((model) => model.key)
+      .join(",") === "contract/svg",
     "filters by output representation and lifecycle"
   )
 
@@ -258,15 +327,26 @@ export function runModelCatalogContractChecks() {
       transports: ["gateway-provider-native"],
       protocols: ["provider-native"],
       capabilities: ["dubbing"],
-    }).map((model) => model.key).join(",") === "contract/dubbing",
+    })
+      .map((model) => model.key)
+      .join(",") === "contract/dubbing",
     "filters by provider-native transport and protocol"
+  )
+
+  assert(
+    filterModelCatalog(CONTRACT_FIXTURES, {
+      capabilities: ["voice-cloning"],
+    })[0]?.identityOutputs?.[0] === "cloned-voice",
+    "represents endpoints that produce owner-scoped identities"
   )
 
   assert(
     filterModelCatalog(CONTRACT_FIXTURES, {
       outputs: ["model3d"],
       lifecycles: ["experimental"],
-    }).map((model) => model.key).join(",") === "contract/model3d",
+    })
+      .map((model) => model.key)
+      .join(",") === "contract/model3d",
     "represents experimental 3D without a schema change"
   )
 
