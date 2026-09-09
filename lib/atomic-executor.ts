@@ -37,12 +37,27 @@ const PROVIDER_AUTH_PLACEHOLDER = "binding-authenticated"
 export interface AtomicExecuteRequest extends AtomicRequestBase {}
 export interface AtomicSubmitRequest extends AtomicRequestBase {}
 
+export type AtomicKeySource =
+  | "workers-binding"
+  | "unified-billing"
+  | "provider-key"
+
+export interface AtomicResultMetadata extends AtomicExecutionMetadata {
+  gatewayId: string
+  keySource: AtomicKeySource
+  routing: {
+    requestedModelKey: string
+    resolvedModelKey: string
+    fallbackUsed: boolean
+  }
+}
+
 export interface AtomicImmediateResult {
   kind: "immediate"
   model: ModelDefinition
   payload: AtomicImmediatePayload
   usage?: Record<string, unknown>
-  metadata: AtomicExecutionMetadata
+  metadata: AtomicResultMetadata
 }
 
 export interface AtomicSubmissionHandle {
@@ -56,7 +71,7 @@ export interface AtomicSubmissionHandle {
     cancelUrl?: string
     initialState: "queued" | "running" | "unknown"
   }
-  metadata: AtomicExecutionMetadata
+  metadata: AtomicResultMetadata
 }
 
 export interface AtomicExecutorRuntime {
@@ -123,6 +138,31 @@ function resolveModel(modelKey: string) {
 export function validateAtomicRequest(request: AtomicRequestBase) {
   const model = resolveModel(request.modelKey)
   return validateAtomicRequestAgainstModel(model, request)
+}
+
+function keySourceForBinding(model: ModelDefinition): AtomicKeySource {
+  return model.catalogSource === "workers-ai"
+    ? "workers-binding"
+    : "unified-billing"
+}
+
+function buildResultMetadata(
+  env: AtomicExecutorEnv,
+  model: ModelDefinition,
+  request: AtomicRequestBase,
+  keySource: AtomicKeySource,
+  upstreamRequestId?: string
+): AtomicResultMetadata {
+  return {
+    ...buildAtomicMetadata(model, request, upstreamRequestId),
+    gatewayId: env.CLOUDFLARE_AI_GATEWAY_ID,
+    keySource,
+    routing: {
+      requestedModelKey: request.modelKey,
+      resolvedModelKey: model.key,
+      fallbackUsed: false,
+    },
+  }
 }
 
 function parseProtocolRequestBody(body: BodyInit | null | undefined) {
@@ -275,9 +315,11 @@ async function runBindingAtomic(
     model,
     payload,
     usage,
-    metadata: buildAtomicMetadata(
+    metadata: buildResultMetadata(
+      env,
       model,
       request,
+      keySourceForBinding(model),
       extractAtomicRequestId(response.headers)
     ),
   }
@@ -391,9 +433,11 @@ async function executeProviderNative(
     model,
     payload,
     usage,
-    metadata: buildAtomicMetadata(
+    metadata: buildResultMetadata(
+      env,
       model,
       request,
+      "provider-key",
       extractAtomicRequestId(response.headers)
     ),
   }
@@ -490,9 +534,11 @@ export async function submitAtomic(
       cancelUrl: readAtomicStringField(payload.value, "cancel_url"),
       initialState: normalizeAtomicQueueState(payload.value),
     },
-    metadata: buildAtomicMetadata(
+    metadata: buildResultMetadata(
+      atomicEnv,
       model,
       request,
+      "provider-key",
       extractAtomicRequestId(response.headers) ?? requestId
     ),
   }
