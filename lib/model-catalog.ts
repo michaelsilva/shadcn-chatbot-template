@@ -124,6 +124,12 @@ export type OutputRepresentation =
       materials?: "none" | "optional" | "pbr"
     }
 
+type RepresentationSelector<T extends OutputRepresentation> =
+  T extends unknown ? Pick<T, "artifact" | "format"> : never
+
+export type OutputRepresentationSelector =
+  RepresentationSelector<OutputRepresentation>
+
 export type ModelParameter =
   | {
       key: string
@@ -246,7 +252,7 @@ export interface ModelQuery {
   capabilities?: readonly ModelCapability[]
   inputs?: readonly ArtifactKind[]
   outputs?: readonly ArtifactKind[]
-  representation?: Pick<OutputRepresentation, "artifact" | "format">
+  representation?: OutputRepresentationSelector
   transports?: readonly ModelTransport[]
   protocols?: readonly ModelProtocol[]
   lifecycles?: readonly ModelLifecycle[]
