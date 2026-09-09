@@ -96,7 +96,12 @@ export const MODELS: GatewayModel[] = MODEL_CATALOG.filter(
   isServerEnabledModel
 ).map((model) => ({ id: model.key, name: model.name }))
 
-export const DEFAULT_MODEL = MODELS[0].id
+const defaultModel = MODELS[0]
+if (!defaultModel) {
+  throw new Error("The model catalog must contain at least one enabled model.")
+}
+
+export const DEFAULT_MODEL = defaultModel.id
 
 export function getModelDefinition(key: string) {
   return findEnabledCatalogModel(MODEL_CATALOG, key)
