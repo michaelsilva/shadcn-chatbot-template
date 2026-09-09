@@ -35,6 +35,12 @@ export function Chat({
   children?: React.ReactNode
 }) {
   const [model, setModel] = React.useState(models[0]?.id ?? "")
+  // #28: a stable id for this browser session's conversation so the
+  // server can persist/reconstruct canonical history in D1 across
+  // turns instead of trusting whatever the browser resends. Durable
+  // cross-reload conversation history/navigation is #26's job — this
+  // only keeps one chat's turns associated while the tab stays open.
+  const [conversationId, setConversationId] = React.useState(() => crypto.randomUUID())
 
   const {
     messages,
@@ -68,7 +74,13 @@ export function Chat({
       : undefined
 
   return (
-    <ChatActionsProvider isBusy={isBusy} onNewChat={() => setMessages([])}>
+    <ChatActionsProvider
+      isBusy={isBusy}
+      onNewChat={() => {
+        setMessages([])
+        setConversationId(crypto.randomUUID())
+      }}
+    >
       <div className="mx-auto flex h-svh w-full flex-col">
         {children}
         {messages.length === 0 ? (
@@ -86,7 +98,7 @@ export function Chat({
                   onSelect={(prompt) =>
                     sendMessage(
                       { text: prompt },
-                      { body: { model: resolvedModel } }
+                      { body: { model: resolvedModel, conversationId } }
                     )
                   }
                 />
@@ -149,7 +161,7 @@ export function Chat({
             onModelChange={setModel}
             isBusy={isBusy}
             onSubmit={(text) =>
-              sendMessage({ text }, { body: { model: resolvedModel } })
+              sendMessage({ text }, { body: { model: resolvedModel, conversationId } })
             }
             onStop={() => stop()}
           />

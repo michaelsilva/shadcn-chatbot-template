@@ -10,9 +10,12 @@ on:
       - "lib/db/**"
       - "lib/storage/**"
       - "lib/workflows/**"
+      - "lib/context/**"
       - "lib/current-owner.ts"
       - "lib/atomic-executor.ts"
       - "lib/model-catalog-data.ts"
+      - "lib/models.ts"
+      - "components/chat.tsx"
       - "app/api/workflows/**"
       - "app/api/assets/**"
       - "app/api/chat/**"
@@ -31,9 +34,12 @@ on:
       - "lib/db/**"
       - "lib/storage/**"
       - "lib/workflows/**"
+      - "lib/context/**"
       - "lib/current-owner.ts"
       - "lib/atomic-executor.ts"
       - "lib/model-catalog-data.ts"
+      - "lib/models.ts"
+      - "components/chat.tsx"
       - "app/api/workflows/**"
       - "app/api/assets/**"
       - "app/api/chat/**"
@@ -66,6 +72,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm workflows:contract
+      - run: pnpm context:contract
       - run: pnpm workflow:test
       - run: pnpm db:test
       - run: pnpm storage:contract
