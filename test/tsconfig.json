@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["@cloudflare/vitest-plugin/types", "@cloudflare/workers-types"]
   },
-  "include": ["./**/*.ts", "../lib/db/**/*.ts", "../lib/conversation.ts"]
+  "include": ["./**/*.ts", "../lib/db/**/*.ts", "../lib/storage/**/*.ts", "../lib/conversation.ts"]
 }

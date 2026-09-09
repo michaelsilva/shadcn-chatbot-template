@@ -21,7 +21,8 @@
     "catalog:validate-workers:remote": "node scripts/validate-workers-ai-catalog.mjs --remote-required",
     "catalog:refresh-workers": "node scripts/validate-workers-ai-catalog.mjs --refresh",
     "workflow:test": "cd workflow-worker && vitest run",
-    "db:test": "vitest run"
+    "db:test": "vitest run",
+    "storage:contract": "rm -rf /tmp/shadcn-storage-contract && tsc lib/storage/core.ts lib/storage/core.contract.ts --module commonjs --moduleResolution node --target es2022 --lib es2022,dom --outDir /tmp/shadcn-storage-contract --skipLibCheck && NODE_PATH=\"$PWD/node_modules\" node /tmp/shadcn-storage-contract/core.contract.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.36",
@@ -30,6 +31,7 @@
     "@base-ui/react": "^1.7.0",
     "@shadcn/react": "^0.3.0",
     "ai": "^7.0.58",
+    "aws4fetch": "^1.0.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.30.0",

@@ -26,6 +26,9 @@ importers:
       ai:
         specifier: ^7.0.58
         version: 7.0.58(zod@4.4.3)
+      aws4fetch:
+        specifier: ^1.0.20
+        version: 1.0.20
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

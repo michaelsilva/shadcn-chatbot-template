@@ -1,10 +1,11 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
-  // Test-only Worker config for lib/db's Vitest suite. The real app
-  // Worker's wrangler.jsonc points at the OpenNext build output, which
-  // doesn't exist without a full `next build` — this trivial standalone
-  // Worker declares the same D1 binding so `pnpm db:test` doesn't
-  // require building the whole app first. Never deployed.
+  // Test-only Worker config for lib/db's and lib/storage's Vitest
+  // suites. The real app Worker's wrangler.jsonc points at the
+  // OpenNext build output, which doesn't exist without a full
+  // `next build` — this trivial standalone Worker declares the same
+  // D1/R2 bindings so `pnpm db:test` doesn't require building the whole
+  // app first. Never deployed.
   "name": "shadcn-chatbot-db-test",
   "main": "./worker.ts",
   "compatibility_date": "2026-09-09",
@@ -18,4 +19,21 @@
       "migrations_dir": "../migrations",
     },
   ],
+  "r2_buckets": [
+    {
+      "binding": "ASSETS_BUCKET",
+      "bucket_name": "shadcn-chatbot-assets",
+    },
+  ],
+  "vars": {
+    // Fake, non-secret values. Real presigning is exercised offline
+    // against these in lib/storage/core.contract.ts (no network call to
+    // R2 happens when generating a presigned URL — see core.ts); the R2
+    // *binding* operations these tests exercise (head/put/delete/
+    // multipart) go through Miniflare's local R2 simulation, not these
+    // credentials.
+    "CLOUDFLARE_ACCOUNT_ID": "test-account",
+    "R2_ACCESS_KEY_ID": "test-access-key-id",
+    "R2_SECRET_ACCESS_KEY": "test-secret-access-key",
+  },
 }

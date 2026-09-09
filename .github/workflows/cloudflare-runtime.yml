@@ -8,7 +8,10 @@ on:
       - "migrations/**"
       - "lib/runtime-probe*.ts"
       - "lib/db/**"
+      - "lib/storage/**"
+      - "lib/current-owner.ts"
       - "app/api/workflows/**"
+      - "app/api/assets/**"
       - "test/**"
       - "vitest.config.ts"
       - "package.json"
@@ -22,7 +25,10 @@ on:
       - "migrations/**"
       - "lib/runtime-probe*.ts"
       - "lib/db/**"
+      - "lib/storage/**"
+      - "lib/current-owner.ts"
       - "app/api/workflows/**"
+      - "app/api/assets/**"
       - "test/**"
       - "vitest.config.ts"
       - "package.json"
@@ -53,3 +59,4 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm workflow:test
       - run: pnpm db:test
+      - run: pnpm storage:contract
