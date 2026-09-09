@@ -48,30 +48,53 @@ export type ModelCapability =
   | "vision"
   | "tool-calling"
   | "structured-output"
+  | "ocr"
+  | "image-captioning"
+  | "object-detection"
   | "image-generation"
   | "image-edit"
+  | "image-inpaint"
+  | "image-outpaint"
+  | "image-object-removal"
+  | "image-relighting"
+  | "image-multi-reference"
+  | "image-mask-input"
   | "background-removal"
   | "upscale-faithful"
   | "upscale-creative"
   | "svg-generation"
   | "transcription"
   | "diarization"
+  | "speech-language-detection"
   | "text-to-speech"
+  | "voice-cloning"
+  | "voice-design"
   | "music-generation"
   | "sound-effect-generation"
   | "audio-to-audio"
   | "audio-isolation"
   | "voice-conversion"
   | "dubbing"
+  | "speaker-preservation"
   | "video-generation"
   | "image-to-video"
   | "video-reference"
   | "video-edit"
   | "video-continuation"
+  | "video-first-frame"
+  | "video-last-frame"
+  | "video-multi-image-reference"
+  | "video-multi-video-reference"
+  | "video-audio-reference"
+  | "video-multi-shot"
+  | "video-element-reference"
   | "native-video-audio"
+  | "avatar-video"
+  | "video-4k"
   | "text-to-3d"
   | "image-to-3d"
   | "model3d-rigging"
+  | "model3d-animation"
 
 export type ProviderNativeToolClass =
   | "web-search"
@@ -82,8 +105,11 @@ export type IdentityKind =
   | "builtin-voice"
   | "cloned-voice"
   | "designed-voice"
+  | "reference-voice"
   | "speaker-embedding"
   | "custom-element"
+
+export type OwnerScopedIdentityKind = Exclude<IdentityKind, "builtin-voice">
 
 export type ExecutionResultMode = "immediate" | "queued" | "either"
 
@@ -190,6 +216,10 @@ export interface ModelReasoningSupport {
   controls?: readonly ("effort" | "budget" | "thinking")[]
 }
 
+export interface ModelContinuationSupport {
+  mode: "none" | "provider-state"
+}
+
 export interface ModelVerification {
   lastVerifiedAt: string
   docs: readonly string[]
@@ -215,7 +245,11 @@ export interface ModelDefinition {
   execution: ModelExecution
   tools?: ModelToolSupport
   reasoning?: ModelReasoningSupport
+  continuation?: ModelContinuationSupport
+  /** Identity values are stored separately; this only declares accepted kinds. */
   identityInputs?: readonly IdentityKind[]
+  /** Endpoints such as voice cloning can create owner-scoped identities. */
+  identityOutputs?: readonly OwnerScopedIdentityKind[]
   parameters?: readonly ModelParameter[]
   parameterSchemaRef?: string
   limits?: ModelLimits
@@ -228,12 +262,12 @@ export interface ModelDefinition {
 
 /**
  * User/provider-scoped identities are deliberately separate from ModelDefinition.
- * The catalog may declare accepted identity kinds, but concrete identities live in
- * owner-scoped application state and are referenced through an app-owned id.
+ * The catalog may declare accepted/created identity kinds, but concrete identities
+ * live in owner-scoped application state and are referenced through an app-owned id.
  */
 export interface OwnerScopedIdentityReference {
   id: string
-  kind: Exclude<IdentityKind, "builtin-voice">
+  kind: OwnerScopedIdentityKind
   ownerId: string
   provider: string
 }
@@ -343,8 +377,10 @@ export function assertValidModelCatalog(catalog: readonly ModelDefinition[]) {
     if (!model.inputs.length) {
       throw new Error(`Model ${model.key} must declare at least one input kind.`)
     }
-    if (!model.outputs.length) {
-      throw new Error(`Model ${model.key} must declare at least one output kind.`)
+    if (!model.outputs.length && !model.identityOutputs?.length) {
+      throw new Error(
+        `Model ${model.key} must declare at least one artifact or identity output.`
+      )
     }
 
     for (const representation of model.representations ?? []) {
