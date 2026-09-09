@@ -1,7 +1,7 @@
 import {
   assertValidModelCatalog,
   type ModelDefinition,
-} from "./model-catalog"
+} from "@/lib/model-catalog"
 
 const VERIFIED_AT = "2026-09-09"
 const CLOUDFLARE_FAL_DOCS =
@@ -366,8 +366,7 @@ export const MODEL_CATALOG = assertValidModelCatalog([
     ],
     execution: { result: "immediate", streaming: false },
     continuation: { mode: "none" },
-    limits: { maxReferences: 8 },
-    billingClass: "high-cost",
+    billingClass: "premium",
     accessClass: "credential-required",
     zeroDataRetention: "unknown",
     parameterSchemaRef:
@@ -385,7 +384,7 @@ export const MODEL_CATALOG = assertValidModelCatalog([
     transport: "unified-run",
     protocol: "unified-run",
     lifecycle: "launch",
-    roles: ["frontier", "editing", "reference-heavy"],
+    roles: ["balanced", "editing"],
     inputs: ["text", "image"],
     outputs: ["image"],
     capabilities: [
@@ -397,24 +396,12 @@ export const MODEL_CATALOG = assertValidModelCatalog([
       {
         artifact: "image",
         format: "raster",
-        mimeTypes: ["image/png", "image/jpeg", "image/webp"],
+        mimeTypes: ["image/png", "image/webp", "image/jpeg"],
       },
     ],
     execution: { result: "immediate", streaming: false },
     continuation: { mode: "none" },
     parameters: [
-      {
-        key: "size",
-        label: "Size",
-        kind: "select",
-        options: [
-          { value: "auto", label: "Auto" },
-          { value: "1024x1024", label: "Square" },
-          { value: "1024x1536", label: "Portrait" },
-          { value: "1536x1024", label: "Landscape" },
-        ],
-        default: "auto",
-      },
       {
         key: "quality",
         label: "Quality",
@@ -426,6 +413,17 @@ export const MODEL_CATALOG = assertValidModelCatalog([
           { value: "high", label: "High" },
         ],
         default: "auto",
+      },
+      {
+        key: "output_format",
+        label: "Format",
+        kind: "select",
+        options: [
+          { value: "png", label: "PNG" },
+          { value: "webp", label: "WebP" },
+          { value: "jpeg", label: "JPEG" },
+        ],
+        default: "png",
       },
     ],
     limits: { maxReferences: 16 },
@@ -661,17 +659,17 @@ export const MODEL_CATALOG = assertValidModelCatalog([
     ),
   },
 
-  // SVG / vector -------------------------------------------------------------
+  // SVG / vector --------------------------------------------------------------
   {
     key: "recraft/recraftv4-1-pro-vector",
     upstreamModelId: "recraft/recraftv4-1-pro-vector",
-    name: "Recraft V4.1 Pro Vector",
+    name: "Recraft V4.1 Pro SVG",
     provider: "recraft",
     catalogSource: "unified",
     transport: "unified-run",
     protocol: "unified-run",
     lifecycle: "launch",
-    roles: ["design"],
+    roles: ["design", "frontier"],
     inputs: ["text"],
     outputs: ["image"],
     capabilities: ["svg-generation"],
@@ -692,7 +690,7 @@ export const MODEL_CATALOG = assertValidModelCatalog([
   {
     key: "recraft/recraftv4-1-vector",
     upstreamModelId: "recraft/recraftv4-1-vector",
-    name: "Recraft V4.1 Vector",
+    name: "Recraft V4.1 SVG",
     provider: "recraft",
     catalogSource: "unified",
     transport: "unified-run",
@@ -719,19 +717,17 @@ export const MODEL_CATALOG = assertValidModelCatalog([
   {
     key: "recraft/recraftv4-1-utility-pro-vector",
     upstreamModelId: "recraft/recraftv4-1-utility-pro-vector",
-    name: "Recraft V4.1 Utility Pro Vector",
+    name: "Recraft V4.1 Utility Pro SVG",
     provider: "recraft",
     catalogSource: "unified",
     transport: "unified-run",
     protocol: "unified-run",
     lifecycle: "experimental",
-    roles: ["design", "specialist"],
+    roles: ["design"],
     inputs: ["text"],
     outputs: ["image"],
     capabilities: ["svg-generation"],
-    representations: [
-      { artifact: "image", format: "svg", mimeTypes: ["image/svg+xml"] },
-    ],
+    representations: [{ artifact: "image", format: "svg" }],
     execution: { result: "immediate", streaming: false },
     continuation: { mode: "none" },
     billingClass: "premium",
@@ -784,7 +780,7 @@ export const MODEL_CATALOG = assertValidModelCatalog([
     roles: ["specialist", "workers-hosted"],
     inputs: ["audio"],
     outputs: ["text"],
-    capabilities: ["transcription", "speech-language-detection"],
+    capabilities: ["transcription", "diarization"],
     representations: [{ artifact: "text", format: "transcript" }],
     execution: { result: "immediate", streaming: true },
     continuation: { mode: "none" },
@@ -806,17 +802,17 @@ export const MODEL_CATALOG = assertValidModelCatalog([
     transport: "unified-run",
     protocol: "unified-run",
     lifecycle: "launch",
-    roles: ["specialist"],
+    roles: ["frontier", "specialist"],
     inputs: ["text"],
     outputs: ["audio"],
     capabilities: ["text-to-speech"],
     representations: [
-      { artifact: "audio", format: "audio", containers: ["mp3"] },
+      { artifact: "audio", format: "audio", containers: ["mp3", "wav"] },
     ],
     execution: { result: "immediate", streaming: false },
     continuation: { mode: "none" },
     identityInputs: ["builtin-voice"],
-    billingClass: "standard",
+    billingClass: "premium",
     accessClass: "credential-required",
     zeroDataRetention: "unknown",
     parameterSchemaRef:
@@ -839,12 +835,12 @@ export const MODEL_CATALOG = assertValidModelCatalog([
     outputs: ["audio"],
     capabilities: ["text-to-speech"],
     representations: [
-      { artifact: "audio", format: "audio", containers: ["mp3"] },
+      { artifact: "audio", format: "audio", containers: ["mp3", "wav"] },
     ],
     execution: { result: "immediate", streaming: false },
     continuation: { mode: "none" },
     identityInputs: ["builtin-voice"],
-    billingClass: "value",
+    billingClass: "standard",
     accessClass: "credential-required",
     zeroDataRetention: "unknown",
     parameterSchemaRef:
@@ -853,12 +849,36 @@ export const MODEL_CATALOG = assertValidModelCatalog([
       "https://developers.cloudflare.com/ai/models/elevenlabs/eleven-flash-v2-5/"
     ),
   },
+  {
+    key: "fal-ai/qwen-3-tts/clone-voice/1.7b",
+    upstreamModelId: "fal-ai/qwen-3-tts/clone-voice/1.7b",
+    name: "Qwen3 TTS Voice Clone",
+    provider: "fal",
+    catalogSource: "gateway-provider-native",
+    transport: "gateway-provider-native",
+    protocol: "provider-native",
+    lifecycle: "experimental",
+    roles: ["specialist"],
+    inputs: ["audio"],
+    outputs: [],
+    capabilities: ["voice-cloning"],
+    identityOutputs: ["cloned-voice"],
+    execution: { result: "queued", streaming: false, background: true },
+    continuation: { mode: "none" },
+    billingClass: "standard",
+    accessClass: "credential-required",
+    zeroDataRetention: "unknown",
+    verification: verified(
+      CLOUDFLARE_FAL_DOCS,
+      "https://fal.ai/models/fal-ai/qwen-3-tts/clone-voice/1.7b"
+    ),
+  },
 
-  // Post-launch generative audio / localization ------------------------------
+  // Post-launch audio / localization ----------------------------------------
   {
     key: "elevenlabs/music-v2",
     upstreamModelId: "elevenlabs/music-v2",
-    name: "Eleven Music v2",
+    name: "ElevenLabs Music v2",
     provider: "elevenlabs",
     catalogSource: "unified",
     transport: "unified-run",
@@ -869,7 +889,7 @@ export const MODEL_CATALOG = assertValidModelCatalog([
     outputs: ["audio"],
     capabilities: ["music-generation"],
     representations: [{ artifact: "audio", format: "audio" }],
-    execution: { result: "immediate", streaming: false },
+    execution: { result: "either", streaming: false, background: true },
     continuation: { mode: "none" },
     billingClass: "premium",
     accessClass: "credential-required",
@@ -1224,7 +1244,7 @@ export const MODEL_CATALOG = assertValidModelCatalog([
       {
         artifact: "model3d",
         format: "model3d",
-        containers: ["glb", "gltf", "obj"],
+        containers: ["glb", "obj"],
         materials: "pbr",
       },
     ],
