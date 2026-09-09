@@ -20,6 +20,27 @@ const sourceFiles = [
   "lib/atomic-executor.integration.contract.ts",
 ]
 
+const sdkStub = `
+export function createWorkersAI() {
+  return (modelId: string) => ({ protocol: "workers-ai", modelId })
+}
+
+export function createAnthropic() {
+  return (modelId: string) => ({ protocol: "messages", modelId })
+}
+
+export function createOpenAI() {
+  return {
+    responses(modelId: string) {
+      return { protocol: "responses", modelId }
+    },
+    chat(modelId: string) {
+      return { protocol: "chat-completions", modelId }
+    },
+  }
+}
+`
+
 function fail(message) {
   console.error(message)
   process.exitCode = 1
@@ -32,13 +53,15 @@ try {
     path.join(tempRoot, "package.json"),
     JSON.stringify({ type: "commonjs" })
   )
+  await writeFile(path.join(sourceDir, "ai-sdk-stubs.ts"), sdkStub)
 
   for (const sourcePath of sourceFiles) {
     let source = await readFile(path.join(root, sourcePath), "utf8")
 
-    // The production alias is correct for Next/tsconfig. The temporary CommonJS
-    // harness copies the file outside that alias environment, so rewrite exactly
-    // this import only in the disposable test copy.
+    // Production aliases and ESM SDK packages are correct for the application.
+    // The disposable CommonJS harness rewrites only its local copies so runtime
+    // tests can isolate our dispatch/transport logic. Full repo typecheck still
+    // validates the real SDK imports and their Cloudflare types.
     if (sourcePath === "lib/model-catalog-data.ts") {
       const productionImport = 'from "@/lib/model-catalog"'
       if (!source.includes(productionImport)) {
@@ -47,6 +70,22 @@ try {
         )
       }
       source = source.replace(productionImport, 'from "./model-catalog"')
+    }
+
+    if (sourcePath === "lib/atomic-executor.ts") {
+      for (const packageName of [
+        "@ai-sdk/anthropic",
+        "@ai-sdk/openai",
+        "workers-ai-provider",
+      ]) {
+        const productionImport = `from "${packageName}"`
+        if (!source.includes(productionImport)) {
+          throw new Error(
+            `Expected production SDK import ${packageName} was not found; integration harness needs review.`
+          )
+        }
+        source = source.replace(productionImport, 'from "./ai-sdk-stubs"')
+      }
     }
 
     await writeFile(path.join(sourceDir, path.basename(sourcePath)), source)
@@ -60,6 +99,7 @@ try {
       ...sourceFiles.map((sourcePath) =>
         path.join(sourceDir, path.basename(sourcePath))
       ),
+      path.join(sourceDir, "ai-sdk-stubs.ts"),
       path.join(root, "cloudflare-env.d.ts"),
       "--module",
       "commonjs",
