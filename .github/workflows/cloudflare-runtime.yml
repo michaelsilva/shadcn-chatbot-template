@@ -9,9 +9,13 @@ on:
       - "lib/runtime-probe*.ts"
       - "lib/db/**"
       - "lib/storage/**"
+      - "lib/workflows/**"
       - "lib/current-owner.ts"
+      - "lib/atomic-executor.ts"
+      - "lib/model-catalog-data.ts"
       - "app/api/workflows/**"
       - "app/api/assets/**"
+      - "app/api/chat/**"
       - "test/**"
       - "vitest.config.ts"
       - "package.json"
@@ -26,9 +30,13 @@ on:
       - "lib/runtime-probe*.ts"
       - "lib/db/**"
       - "lib/storage/**"
+      - "lib/workflows/**"
       - "lib/current-owner.ts"
+      - "lib/atomic-executor.ts"
+      - "lib/model-catalog-data.ts"
       - "app/api/workflows/**"
       - "app/api/assets/**"
+      - "app/api/chat/**"
       - "test/**"
       - "vitest.config.ts"
       - "package.json"
@@ -57,6 +65,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - run: pnpm workflows:contract
       - run: pnpm workflow:test
       - run: pnpm db:test
       - run: pnpm storage:contract

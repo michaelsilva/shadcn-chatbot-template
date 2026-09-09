@@ -1,7 +1,7 @@
 import {
   assertValidModelCatalog,
   type ModelDefinition,
-} from "@/lib/model-catalog"
+} from "./model-catalog"
 
 const VERIFIED_AT = "2026-09-09"
 const CLOUDFLARE_FAL_DOCS =

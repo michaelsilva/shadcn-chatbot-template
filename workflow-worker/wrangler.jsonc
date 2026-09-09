@@ -19,11 +19,29 @@
       "bucket_name": "shadcn-chatbot-assets",
     },
   ],
+  "vars": {
+    "CLOUDFLARE_AI_GATEWAY_ID": "shadcn-chatbot",
+    "CLOUDFLARE_ACCOUNT_ID": "d6ad0c67765f90322b4df2ff48b582b7",
+  },
+  // No `remote: true` here (unlike the main app's wrangler.jsonc):
+  // this config is also what `pnpm workflow:test` points Miniflare at,
+  // and every AI-touching plan step is deliberately mocked in tests
+  // (see test/plan-execution-workflow.test.ts) rather than exercising
+  // a real Workers AI/Gateway call — `remote: true` would make the test
+  // run try to authenticate against the live Cloudflare account.
+  "ai": {
+    "binding": "AI",
+  },
   "workflows": [
     {
       "binding": "RUNTIME_PROBE_WORKFLOW",
       "name": "shadcn-chatbot-runtime-probe",
       "class_name": "RuntimeProbeWorkflow",
+    },
+    {
+      "binding": "PLAN_EXECUTION_WORKFLOW",
+      "name": "shadcn-chatbot-plan-execution",
+      "class_name": "PlanExecutionWorkflow",
     },
   ],
   "observability": {

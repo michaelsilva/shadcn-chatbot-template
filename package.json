@@ -22,7 +22,8 @@
     "catalog:refresh-workers": "node scripts/validate-workers-ai-catalog.mjs --refresh",
     "workflow:test": "cd workflow-worker && vitest run",
     "db:test": "vitest run",
-    "storage:contract": "rm -rf /tmp/shadcn-storage-contract && tsc lib/storage/core.ts lib/storage/core.contract.ts --module commonjs --moduleResolution node --target es2022 --lib es2022,dom --outDir /tmp/shadcn-storage-contract --skipLibCheck && NODE_PATH=\"$PWD/node_modules\" node /tmp/shadcn-storage-contract/core.contract.js"
+    "storage:contract": "rm -rf /tmp/shadcn-storage-contract && tsc lib/storage/core.ts lib/storage/core.contract.ts --module commonjs --moduleResolution node --target es2022 --lib es2022,dom --outDir /tmp/shadcn-storage-contract --skipLibCheck && NODE_PATH=\"$PWD/node_modules\" node /tmp/shadcn-storage-contract/core.contract.js",
+    "workflows:contract": "rm -rf /tmp/shadcn-workflows-contract && tsc lib/workflows/registry.ts lib/workflows/registry.contract.ts lib/workflows/plan-selection.ts lib/workflows/plan-selection.contract.ts lib/workflows/svg-sanitize.ts lib/workflows/svg-sanitize.contract.ts --module commonjs --moduleResolution node --target es2022 --lib es2022,dom --types @cloudflare/workers-types --outDir /tmp/shadcn-workflows-contract --skipLibCheck && NODE_PATH=\"$PWD/node_modules\" node /tmp/shadcn-workflows-contract/workflows/registry.contract.js && NODE_PATH=\"$PWD/node_modules\" node /tmp/shadcn-workflows-contract/workflows/plan-selection.contract.js && node /tmp/shadcn-workflows-contract/workflows/svg-sanitize.contract.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.36",

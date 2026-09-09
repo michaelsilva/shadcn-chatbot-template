@@ -78,7 +78,17 @@ export interface AtomicExecutorRuntime {
   fetch?: typeof fetch
 }
 
-type AtomicExecutorEnv = CloudflareEnv & {
+/**
+ * Deliberately structural, not `CloudflareEnv` (the app Worker's exact
+ * binding set) — the sibling Workflow Worker (#25) has a different
+ * binding set (no `ASSETS`/static-asset binding, for example) but
+ * needs to call `executeAtomic()`/`submitAtomic()` too (#24's
+ * `model.execute` step). Any env exposing at least these fields works,
+ * including the real `CloudflareEnv`.
+ */
+export type AtomicExecutorEnv = {
+  AI: Ai
+  CLOUDFLARE_AI_GATEWAY_ID: string
   CLOUDFLARE_ACCOUNT_ID?: string
   CLOUDFLARE_AI_GATEWAY_TOKEN?: string
   FAL_KEY?: string
@@ -250,7 +260,7 @@ export function assertLanguageModel(model: ModelDefinition) {
  * Returns one Vercel AI SDK language model selected entirely from catalog
  * protocol metadata. Provider names are not used to choose the protocol.
  */
-export function getAtomicLanguageModel(env: CloudflareEnv, modelKey: string) {
+export function getAtomicLanguageModel(env: AtomicExecutorEnv, modelKey: string) {
   const model = resolveModel(modelKey)
   assertLanguageModel(model)
   const atomicEnv = env as AtomicExecutorEnv
@@ -445,7 +455,7 @@ async function executeProviderNative(
 
 /** Execute exactly one immediate-capable trusted catalog entry. */
 export async function executeAtomic(
-  env: CloudflareEnv,
+  env: AtomicExecutorEnv,
   request: AtomicExecuteRequest,
   runtime: AtomicExecutorRuntime = {}
 ): Promise<AtomicImmediateResult> {
@@ -470,7 +480,7 @@ export async function executeAtomic(
  * callbacks, retry scheduling, and completion ingestion belong to #10.
  */
 export async function submitAtomic(
-  env: CloudflareEnv,
+  env: AtomicExecutorEnv,
   request: AtomicSubmitRequest,
   runtime: AtomicExecutorRuntime = {}
 ): Promise<AtomicSubmissionHandle> {
