@@ -7,6 +7,7 @@ on:
       - "lib/atomic-executor*.ts"
       - "lib/models.ts"
       - "lib/ai.ts"
+      - "scripts/run-atomic-executor-integration.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/atomic-executor.yml"
@@ -17,6 +18,7 @@ on:
       - "lib/atomic-executor*.ts"
       - "lib/models.ts"
       - "lib/ai.ts"
+      - "scripts/run-atomic-executor-integration.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/atomic-executor.yml"
@@ -44,3 +46,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm atomic:contract
+      - run: pnpm atomic:integration
