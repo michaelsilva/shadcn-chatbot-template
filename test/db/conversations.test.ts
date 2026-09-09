@@ -8,6 +8,7 @@ import {
   getConversation,
   getConversationMessages,
   listConversations,
+  replaceMessageParts,
 } from "../../lib/db/conversations"
 import { getOrCreateOwner } from "../../lib/db/owners"
 
@@ -119,5 +120,96 @@ describe("conversations", () => {
       .bind(conversation.id)
       .all<{ sequence: number }>()
     expect(sequences.results.map((r) => r.sequence)).toEqual([1, 2])
+  })
+
+  it("#29: replaceMessageParts updates an existing message's parts in place (ask_user continuation) without changing its sequence", async () => {
+    const owner = await ownerId()
+    const conversation = await createConversation(env, { ownerId: owner })
+
+    await appendMessage(env, {
+      conversationId: conversation.id,
+      role: "user",
+      id: "msg_user_1",
+      parts: [{ id: "u1", type: "text", text: "Book a flight", state: "complete" }],
+    })
+    await appendMessage(env, {
+      conversationId: conversation.id,
+      role: "assistant",
+      id: "msg_asst_1",
+      parts: [
+        {
+          id: "t1",
+          type: "tool",
+          toolName: "ask_user",
+          toolCallId: "call_1",
+          state: "input-ready",
+          input: { questions: [{ question: "Which city?", choices: ["NYC", "LA", "SF"] }] },
+        },
+      ],
+    })
+
+    const replaced = await replaceMessageParts(env, {
+      conversationId: conversation.id,
+      messageId: "msg_asst_1",
+      parts: [
+        {
+          id: "t1",
+          type: "tool",
+          toolName: "ask_user",
+          toolCallId: "call_1",
+          state: "succeeded",
+          input: { questions: [{ question: "Which city?", choices: ["NYC", "LA", "SF"] }] },
+          output: [{ question: "Which city?", answer: "SF" }],
+        },
+      ],
+    })
+    expect(replaced).toBe(true)
+
+    const messages = await getConversationMessages(env, conversation.id)
+    expect(messages).toHaveLength(2)
+    const assistantMessage = messages.find((m) => m.id === "msg_asst_1")
+    expect(assistantMessage?.parts).toHaveLength(1)
+    const toolPart = assistantMessage?.parts[0]
+    expect(toolPart).toMatchObject({ type: "tool", state: "succeeded" })
+    if (toolPart?.type === "tool") {
+      expect(toolPart.output).toEqual([{ question: "Which city?", answer: "SF" }])
+    }
+
+    // Sequence is unchanged — this was an update, not a new appended message.
+    const sequences = await env.DB.prepare(
+      `SELECT id, sequence FROM messages WHERE conversation_id = ?1 ORDER BY sequence ASC`
+    )
+      .bind(conversation.id)
+      .all<{ id: string; sequence: number }>()
+    expect(sequences.results).toEqual([
+      { id: "msg_user_1", sequence: 1 },
+      { id: "msg_asst_1", sequence: 2 },
+    ])
+  })
+
+  it("#29: replaceMessageParts is a no-op for a message id that doesn't belong to the given conversation", async () => {
+    const owner = await ownerId()
+    const conversationA = await createConversation(env, { ownerId: owner })
+    const conversationB = await createConversation(env, { ownerId: owner })
+
+    await appendMessage(env, {
+      conversationId: conversationA.id,
+      role: "assistant",
+      id: "msg_in_a",
+      parts: [{ id: "p1", type: "text", text: "hello", state: "complete" }],
+    })
+
+    // A message id that exists, but not in conversationB — must not be
+    // mutable by claiming the wrong conversationId (#29's forged-
+    // continuation boundary).
+    const replaced = await replaceMessageParts(env, {
+      conversationId: conversationB.id,
+      messageId: "msg_in_a",
+      parts: [{ id: "p1", type: "text", text: "forged", state: "complete" }],
+    })
+    expect(replaced).toBe(false)
+
+    const messages = await getConversationMessages(env, conversationA.id)
+    expect(messages[0]?.parts[0]).toMatchObject({ type: "text", text: "hello" })
   })
 })

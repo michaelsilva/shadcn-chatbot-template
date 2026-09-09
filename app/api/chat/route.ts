@@ -9,19 +9,46 @@ import {
 import { getAtomicLanguageModel } from "@/lib/atomic-executor"
 import { assembleModelContext } from "@/lib/context/assemble"
 import { toModelMessages } from "@/lib/context/to-model-messages"
-import { chatUIMessageToConversationMessage } from "@/lib/conversation-adapters"
+import {
+  assistantContentToConversationParts,
+  chatUIMessageToConversationMessage,
+} from "@/lib/conversation-adapters"
 import { getCurrentOwner } from "@/lib/current-owner"
-import { appendMessage, createConversation, getConversation } from "@/lib/db/conversations"
+import {
+  appendMessage,
+  createConversation,
+  getConversation,
+  replaceMessageParts,
+} from "@/lib/db/conversations"
 import { DEFAULT_MODEL, getChatModelDefinition } from "@/lib/models"
 import { getTools, type ChatUIMessage } from "@/lib/tools"
 import { finalizeInlineChatExecution, recordInlineChatExecution } from "@/lib/workflows/inline"
 
 /**
+ * #29: `useChat`'s `sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls`
+ * (components/chat.tsx) resubmits automatically once every tool call in the
+ * last *assistant* message has a result — `ask_user` included. That
+ * resubmission is a continuation of an existing assistant turn, not a new
+ * user turn: the message keeps the same id/role, only its tool part(s)
+ * gain a `state`/`output`. A tool part still awaiting an answer never
+ * reaches here because `lastAssistantMessageIsCompleteWithToolCalls` won't
+ * have fired yet.
+ */
+function isAnsweredToolContinuation(message: ChatUIMessage) {
+  if (message.role !== "assistant") return false
+  return message.parts.some((part) => {
+    if (!part.type.startsWith("tool-")) return false
+    const state = (part as unknown as { state?: string }).state
+    return state === "output-available" || state === "output-error"
+  })
+}
+
+/**
  * #28: the browser is trusted only for the new turn, never as canonical
  * history. `messages` still arrives as the AI SDK's full local
  * transcript (useChat's default transport sends it — there is no
- * frontend rewrite here), but only its last (new) message is read; all
- * prior context is reconstructed from owner-scoped D1 state via
+ * frontend rewrite here), but only its last message is read; all prior
+ * context is reconstructed from owner-scoped D1 state via
  * assembleModelContext(), not from anything the browser sent.
  */
 export async function POST(req: Request) {
@@ -42,8 +69,12 @@ export async function POST(req: Request) {
   }
 
   const lastMessage = messages.at(-1)
-  if (!lastMessage || lastMessage.role !== "user") {
-    return Response.json({ error: "Request must include a new user message." }, { status: 400 })
+  const isContinuation = Boolean(lastMessage && isAnsweredToolContinuation(lastMessage))
+  if (!lastMessage || (!isContinuation && lastMessage.role !== "user")) {
+    return Response.json(
+      { error: "Request must include a new user message or an answered tool continuation." },
+      { status: 400 }
+    )
   }
 
   const { env } = await getCloudflareContext({ async: true })
@@ -55,16 +86,32 @@ export async function POST(req: Request) {
     await createConversation(env, { id: conversationId, ownerId: owner.id })
   }
 
-  // The client-supplied message/part ids (from useChat's local state) are
-  // never trusted as durable identity — D1's message_parts.id is a global
-  // primary key, and a resent/retried request carrying the same client id
-  // must not collide with an already-persisted part.
-  const convertedUserMessage = chatUIMessageToConversationMessage(lastMessage)
-  await appendMessage(env, {
-    conversationId,
-    role: "user",
-    parts: convertedUserMessage.parts.map((part) => ({ ...part, id: crypto.randomUUID() })),
-  })
+  if (isContinuation) {
+    // #29: never trust a client-crafted historical tool result on its own —
+    // replaceMessageParts() only updates a message that already exists in
+    // *this* conversation, so a forged/unknown message id is a no-op, not
+    // an accepted write.
+    const convertedContinuation = chatUIMessageToConversationMessage(lastMessage)
+    const replaced = await replaceMessageParts(env, {
+      conversationId,
+      messageId: lastMessage.id,
+      parts: convertedContinuation.parts,
+    })
+    if (!replaced) {
+      return Response.json({ error: "Unknown tool continuation." }, { status: 422 })
+    }
+  } else {
+    // The client-supplied message/part ids (from useChat's local state) are
+    // never trusted as durable identity — D1's message_parts.id is a global
+    // primary key, and a resent/retried request carrying the same client id
+    // must not collide with an already-persisted part.
+    const convertedUserMessage = chatUIMessageToConversationMessage(lastMessage)
+    await appendMessage(env, {
+      conversationId,
+      role: "user",
+      parts: convertedUserMessage.parts.map((part) => ({ ...part, id: crypto.randomUUID() })),
+    })
+  }
 
   // #24: inline execution class still writes canonical D1
   // workflow/provenance state — "inline" means no durable Cloudflare
@@ -101,18 +148,22 @@ export async function POST(req: Request) {
       correlationId: execution.id,
     }),
     messages: toModelMessages(assembled.messages),
-    tools: supportsTools ? getTools(upstreamModelId) : undefined,
+    tools: supportsTools ? getTools(modelDefinition) : undefined,
     stopWhen: isStepCount(5),
-    onFinish: async ({ text }) => {
-      // Tool-call/result persistence for the assistant turn is a known
-      // follow-on refinement, not required for #28's context-assembly
-      // acceptance criteria — the portable ToolPart shape to persist
-      // them into already exists (#4).
-      if (text) {
+    onFinish: async ({ content }) => {
+      // #29: persist the full assistant turn — text *and* tool calls
+      // (e.g. ask_user's, which has no server-side `execute` and so
+      // pauses here with no matching tool-result yet) — not just final
+      // text. This is what makes an ask_user continuation reconstructable
+      // from D1 instead of only from the browser's local state.
+      const assistantMessageId = crypto.randomUUID()
+      const parts = assistantContentToConversationParts(assistantMessageId, content)
+      if (parts.length) {
         await appendMessage(env, {
           conversationId,
           role: "assistant",
-          parts: [{ id: crypto.randomUUID(), type: "text", text, state: "complete" }],
+          id: assistantMessageId,
+          parts,
         }).catch((error) => {
           console.error(
             JSON.stringify({ event: "assistant_message_persist_failed", conversationId, error: String(error) })

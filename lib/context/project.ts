@@ -1,4 +1,4 @@
-import { assertNever, type ConversationPart } from "../conversation"
+import { assertNever, type ConversationPart, type JsonValue, type ToolPart } from "../conversation"
 import type { PortableContentPart } from "./types"
 
 /**
@@ -13,6 +13,50 @@ export function estimateTokens(text: string): number {
 
 function describeAssetRole(kind: string, role?: string): string {
   return role ? `${role} ${kind}` : kind
+}
+
+function asRecord(value: JsonValue | undefined): Record<string, JsonValue> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, JsonValue>)
+    : undefined
+}
+
+/**
+ * #29: a generic `[Tool X succeeded]` description is fine for a
+ * read-only lookup, but `ask_user`'s whole point is the questions it
+ * asked and the answers the user gave — losing that in history/current-
+ * turn projection would make a resumed conversation incoherent, not
+ * merely terser. Falls back to the generic description if the input/
+ * output don't match `ask_user`'s known shape (e.g. an in-flight
+ * `input-ready` state with no answer yet).
+ */
+function describeAskUserTool(part: ToolPart): string | undefined {
+  const questions = asRecord(part.input)?.questions
+  if (!Array.isArray(questions) || questions.length === 0) return undefined
+
+  const questionTexts = questions
+    .map((entry) => asRecord(entry)?.question)
+    .filter((question): question is string => typeof question === "string")
+  if (questionTexts.length !== questions.length) return undefined
+
+  if (part.state === "succeeded" && Array.isArray(part.output)) {
+    const answers = new Map(
+      part.output
+        .map((entry) => asRecord(entry))
+        .filter((entry): entry is Record<string, JsonValue> => Boolean(entry))
+        .map((entry) => [entry.question, entry.answer])
+    )
+    const pairs = questionTexts.map(
+      (question) => `"${question}" → "${String(answers.get(question) ?? "(no answer)")}"`
+    )
+    return `[Asked the user and got an answer: ${pairs.join("; ")}]`
+  }
+
+  if (part.state === "failed") {
+    return `[Asked the user (${questionTexts.map((q) => `"${q}"`).join(", ")}) but did not get an answer${part.error ? `: ${part.error.message}` : ""}]`
+  }
+
+  return `[Asked the user: ${questionTexts.map((q) => `"${q}"`).join(", ")} — awaiting answer]`
 }
 
 /**
@@ -51,6 +95,10 @@ export function describePartAsText(part: ConversationPart): string | null {
     case "source":
       return `[Source: ${part.title ?? part.url}]`
     case "tool": {
+      if (part.toolName === "ask_user") {
+        const described = describeAskUserTool(part)
+        if (described) return described
+      }
       const outcome =
         part.state === "succeeded"
           ? "succeeded"

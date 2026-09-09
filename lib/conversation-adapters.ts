@@ -107,3 +107,86 @@ export function chatUIMessageToConversationMessage(
     parts,
   })
 }
+
+/**
+ * The minimal shape this module needs from `streamText()`'s `onFinish`
+ * `content` array (AI SDK core generation content, distinct from the UI
+ * message parts `chatUIMessageToConversationMessage()` reads). Declared
+ * structurally rather than importing the SDK's generic `ContentPart<TOOLS>`
+ * so this adapter doesn't need to be parameterized by the app's tool set.
+ */
+export interface AssistantContentItem {
+  type: string
+  text?: string
+  toolCallId?: string
+  toolName?: string
+  input?: unknown
+  output?: unknown
+  error?: unknown
+}
+
+/**
+ * #29: `ask_user` (and any other tool without a server-side `execute`)
+ * produces a `tool-call` content item with no matching `tool-result` in
+ * the same request — the model is pausing for a client-supplied answer,
+ * not failing. Persisting this turn (rather than only final text, #28's
+ * deferred non-goal) is what lets a resubmitted continuation be
+ * reconstructed from D1 instead of only from the browser's local state.
+ *
+ * A `tool-call`/`tool-result` (or `tool-error`) pair sharing the same
+ * `toolCallId` collapses into one `ToolPart`, matching one tool
+ * invocation's full lifecycle rather than two separate history entries.
+ */
+export function assistantContentToConversationParts(
+  messageId: string,
+  content: readonly AssistantContentItem[]
+): ConversationPart[] {
+  const parts: ConversationPart[] = []
+  const toolPartIndexByCallId = new Map<string, number>()
+
+  for (const item of content) {
+    if (item.type === "text") {
+      if (!item.text) continue
+      parts.push({
+        id: canonicalPartId(messageId, parts.length),
+        type: "text",
+        text: item.text,
+        state: "complete",
+      })
+      continue
+    }
+
+    if (item.type === "tool-call" && item.toolCallId && item.toolName) {
+      toolPartIndexByCallId.set(item.toolCallId, parts.length)
+      parts.push({
+        id: canonicalPartId(messageId, parts.length),
+        type: "tool",
+        toolName: item.toolName,
+        toolCallId: item.toolCallId,
+        state: "input-ready",
+        input: toJsonValue(item.input),
+      })
+      continue
+    }
+
+    if (
+      (item.type === "tool-result" || item.type === "tool-error") &&
+      item.toolCallId
+    ) {
+      const index = toolPartIndexByCallId.get(item.toolCallId)
+      if (index === undefined) continue
+      const existing = parts[index] as ToolPart
+
+      parts[index] =
+        item.type === "tool-result"
+          ? { ...existing, state: "succeeded", output: toJsonValue(item.output) }
+          : {
+              ...existing,
+              state: "failed",
+              error: { message: item.error ? String(item.error) : "Tool execution failed." },
+            }
+    }
+  }
+
+  return parts
+}
