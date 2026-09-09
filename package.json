@@ -19,7 +19,8 @@
     "conversation:contract": "rm -rf /tmp/shadcn-conversation-contract && tsc lib/conversation.ts lib/conversation.contract.ts --module commonjs --moduleResolution node --target es2022 --lib es2022,dom --outDir /tmp/shadcn-conversation-contract --skipLibCheck && NODE_PATH=\"$PWD/node_modules\" node /tmp/shadcn-conversation-contract/conversation.contract.js",
     "catalog:validate-workers": "node scripts/validate-workers-ai-catalog.mjs",
     "catalog:validate-workers:remote": "node scripts/validate-workers-ai-catalog.mjs --remote-required",
-    "catalog:refresh-workers": "node scripts/validate-workers-ai-catalog.mjs --refresh"
+    "catalog:refresh-workers": "node scripts/validate-workers-ai-catalog.mjs --refresh",
+    "workflow:test": "cd workflow-worker && vitest run"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.36",
@@ -44,6 +45,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.6",
     "@cloudflare/workers-types": "^5.20260811.1",
     "@opennextjs/cloudflare": "^1.20.2",
     "@tailwindcss/postcss": "^4",
@@ -56,6 +58,7 @@
     "prettier-plugin-tailwindcss": "^0.8.0",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vitest": "^4.1.11",
     "wrangler": "^4.120.1"
   }
 }

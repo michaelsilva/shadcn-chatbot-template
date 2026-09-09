@@ -1,5 +1,6 @@
 # dependencies
 /node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -15,6 +16,7 @@
 /.next/
 /.open-next/
 /.wrangler/
+.wrangler/
 /out/
 
 # production
