@@ -1,15 +1,18 @@
 import { env } from "cloudflare:workers"
 import { describe, expect, it } from "vitest"
 
+import { createConversation } from "../../lib/db/conversations"
 import { getOrCreateOwner } from "../../lib/db/owners"
 import { finalizeInlineChatExecution, recordInlineChatExecution } from "../../lib/workflows/inline"
 
 describe("inline chat provenance", () => {
   it("records a running inline workflow_execution and finalizes it without ever creating a Cloudflare Workflow instance", async () => {
     const owner = await getOrCreateOwner(env, { authProvider: "test", authSubject: "inline-chat" })
+    const conversation = await createConversation(env, { ownerId: owner.id })
 
     const execution = await recordInlineChatExecution(env, {
       ownerId: owner.id,
+      conversationId: conversation.id,
       requestedModelKey: "@cf/zai-org/glm-5.3-flash",
     })
     expect(execution.execution_class).toBe("inline")

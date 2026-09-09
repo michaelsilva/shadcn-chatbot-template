@@ -4,12 +4,12 @@ import {
   type ModelDefinition,
   type ModelProtocol,
   type ModelQuery,
-} from "@/lib/model-catalog"
+} from "./model-catalog"
 import {
   LAUNCH_MODEL_CATALOG,
   MODEL_CATALOG,
   WORKERS_AI_LAUNCH_MODEL_KEYS,
-} from "@/lib/model-catalog-data"
+} from "./model-catalog-data"
 
 export {
   LAUNCH_MODEL_CATALOG,
